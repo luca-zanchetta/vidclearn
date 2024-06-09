@@ -41613,7 +41613,7 @@ validation_data:
     - "a commentator is speaking while a surfers paddles in the water"
     - "in the sea the men mick fanning is attack the blue whale in adventurly"
     - "a man in the water fighting off a shark during a surfing event"
-    - "a big fish catch the man in sea while he swimming\"
+    - "a big fish catch the man in sea while he swimming"
     - "a man is sinking in the sea water"
     - "a man in the blue shirt in the water with a surfboard and a shark fin near him right before he goes under"
     - "guy struggling to get on the wave for a water skiing"
@@ -59830,4 +59830,3 @@ noise_scheduler_kwargs:
 ema_decay: 0.9999
 global_seed: 42
 is_debug: false
-use_wandb: false
