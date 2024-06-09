@@ -8,8 +8,6 @@ import torchvision.transforms as transforms
 from torch.utils.data.dataset import Dataset
 from animatediff.utils.util import zero_rank_print
 
-
-
 class MSRVTTDataset(Dataset):
     def __init__(
             self,
@@ -19,7 +17,7 @@ class MSRVTTDataset(Dataset):
         ):
         zero_rank_print(f"loading annotations from {json_path} ...")
         with open(json_path, 'r') as jsonfile:
-            self.dataset = json.load(jsonfile)['annotations']
+            self.dataset = json.load(jsonfile)
         self.length = len(self.dataset)
         zero_rank_print(f"data scale: {self.length}")
 
@@ -78,21 +76,21 @@ class MSRVTTDataset(Dataset):
 
 
 
-if __name__ == "__main__":
-    from animatediff.utils.util import save_videos_grid
+# if __name__ == "__main__":
+#     from animatediff.utils.util import save_videos_grid
 
-    dataset = MSRVTTDataset(
-        json_path="/mnt/petrelfs/guoyuwei/projects/datasets/webvid/results_2M_val.csv",
-        video_folder="/mnt/petrelfs/guoyuwei/projects/datasets/webvid/2M_val",
-        sample_size=128,
-        sample_stride=4, sample_n_frames=8,
-        is_image=True,
-    )
-    import pdb
-    pdb.set_trace()
+#     dataset = MSRVTTDataset(
+#         json_path="/mnt/petrelfs/guoyuwei/projects/datasets/webvid/results_2M_val.csv",
+#         video_folder="/mnt/petrelfs/guoyuwei/projects/datasets/webvid/2M_val",
+#         sample_size=128,
+#         sample_stride=4, sample_n_frames=8,
+#         is_image=True,
+#     )
+#     import pdb
+#     pdb.set_trace()
     
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=1,)
-    for idx, batch in enumerate(dataloader):
-        print(batch["pixel_values"].shape, len(batch["text"]))
-        # for i in range(batch["pixel_values"].shape[0]):
-        #     save_videos_grid(batch["pixel_values"][i:i+1].permute(0,2,1,3,4), os.path.join(".", f"{idx}-{i}.mp4"), rescale=True)
+#     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=1,)
+#     for idx, batch in enumerate(dataloader):
+#         print(batch["pixel_values"].shape, len(batch["text"]))
+#         # for i in range(batch["pixel_values"].shape[0]):
+#         #     save_videos_grid(batch["pixel_values"][i:i+1].permute(0,2,1,3,4), os.path.join(".", f"{idx}-{i}.mp4"), rescale=True)
