@@ -1,12 +1,12 @@
 import cv2
 import torch
-import torchvision.transforms as transforms
 import torchvision.models as models
 import numpy as np
 import os
 import itertools
-from scipy.linalg import sqrtm
 
+from scipy.linalg import sqrtm
+from tqdm import tqdm
 
 # Define function to load and preprocess video
 def load_video(video_path, num_frames=16, frame_size=(256, 256)):
@@ -41,9 +41,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2):
 
 real_videos_folder = './animatediff/data/MSRVTT/videos/test'
 generated_videos_folder = './inference_samples/inference_samples_1/inference/samples'
-num_videos = 0
 num_videos_tot = len(os.listdir(real_videos_folder))
-sum_fvd = 0
 image_size = (128, 128)
 frames_per_video = 16
 
@@ -51,11 +49,14 @@ frames_per_video = 16
 mean = torch.tensor([0.485, 0.456, 0.406])
 std = torch.tensor([0.229, 0.224, 0.225])
 
-for real_video_name, generated_video_name in itertools.zip_longest(os.listdir(real_videos_folder), os.listdir(generated_videos_folder), fillvalue=None):
+real_features = []
+generated_features = []
+
+print("[INFO] Extracting features...\n")
+
+for real_video_name, generated_video_name in tqdm(itertools.zip_longest(os.listdir(real_videos_folder), os.listdir(generated_videos_folder), fillvalue=None), total=num_videos_tot):
     if real_video_name is None or generated_video_name is None:
         continue
-    
-    num_videos += 1
     
     real_video_path = os.path.join(real_videos_folder, real_video_name)
     generated_video_path = os.path.join(generated_videos_folder, generated_video_name)
@@ -82,34 +83,23 @@ for real_video_name, generated_video_name in itertools.zip_longest(os.listdir(re
 
     # Extract features
     with torch.no_grad():
-        real_features = i3d_model(real_video).cpu().numpy()
-        generated_features = i3d_model(generated_video).cpu().numpy()
+        real_features.append(i3d_model(real_video).cpu().numpy())
+        generated_features.append(i3d_model(generated_video).cpu().numpy())
 
-    # Reshape features to (samples, features)
-    real_features = real_features.reshape(real_features.shape[0], -1)
-    generated_features = generated_features.reshape(generated_features.shape[0], -1)
+# Reshape features to (samples, features)
+real_features = real_features.reshape(real_features.shape[0], -1)
+generated_features = generated_features.reshape(generated_features.shape[0], -1)
 
-    # If there's only one sample, expand the dimensions to avoid issues with covariance calculation
-    if real_features.shape[0] == 1:
-        real_features = np.vstack([real_features, real_features])
-    if generated_features.shape[0] == 1:
-        generated_features = np.vstack([generated_features, generated_features])
+# If there's only one sample, expand the dimensions to avoid issues with covariance calculation
+if real_features.shape[0] == 1:
+    real_features = np.vstack([real_features, real_features])
+if generated_features.shape[0] == 1:
+    generated_features = np.vstack([generated_features, generated_features])
 
-    # Calculate mean and covariance of features
-    mu_real, sigma_real = np.mean(real_features, axis=0), np.cov(real_features, rowvar=False)
-    mu_generated, sigma_generated = np.mean(generated_features, axis=0), np.cov(generated_features, rowvar=False)
+# Calculate mean and covariance of features
+mu_real, sigma_real = np.mean(real_features, axis=0), np.cov(real_features, rowvar=False)
+mu_generated, sigma_generated = np.mean(generated_features, axis=0), np.cov(generated_features, rowvar=False)
 
-    # Check if the covariances are at least 2D
-    if sigma_real.ndim < 2 or sigma_generated.ndim < 2:
-        print(f'[ERROR] Covariance matrices must be at least 2D, got shapes {sigma_real.shape} and {sigma_generated.shape}')
-        continue
-
-    # Compute FVD
-    fvd = calculate_frechet_distance(mu_real, sigma_real, mu_generated, sigma_generated)
-    print(f'[INFO] FVD for video {num_videos}/{num_videos_tot}:', round(fvd, 5))
-    sum_fvd += fvd
-    
-if num_videos > 0:
-    print(f"\n[INFO] Average FVD score: {round((sum_fvd // num_videos), 5)}\n")
-else:
-    print("\n[INFO] No valid videos processed.\n")
+# Compute FVD
+fvd = calculate_frechet_distance(mu_real, sigma_real, mu_generated, sigma_generated)
+print('[INFO] FVD:', round(fvd, 5))
