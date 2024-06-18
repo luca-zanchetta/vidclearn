@@ -13,3 +13,6 @@ torchvision==0.14.1
 torchaudio==0.13.1
 torch==1.13.1
 accelerate
+opencv-python
+imageio[ffmpeg]
+imageio[pyav]
