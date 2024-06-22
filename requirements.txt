@@ -16,3 +16,6 @@ accelerate
 opencv-python
 imageio[ffmpeg]
 imageio[pyav]
+torchmetrics
+torchmetrics[image]
+pyyaml

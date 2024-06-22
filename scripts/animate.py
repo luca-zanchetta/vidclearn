@@ -34,7 +34,8 @@ def main(args):
     func_args = dict(func_args)
     
     time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    savedir = f"samples/{Path(args.config).stem}-{time_str}"
+    # savedir = f"samples/{Path(args.config).stem}-{time_str}"
+    savedir = f"samples/{Path(args.config).stem}"
     os.makedirs(savedir)
 
     config  = OmegaConf.load(args.config)
