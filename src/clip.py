@@ -1,25 +1,24 @@
-import os
 import torch
 import torchvision.transforms as transforms
 import yaml
+import numpy as np
 
 from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
-from torchvision.io import read_video
 from torch.nn.functional import cosine_similarity
 from tqdm import tqdm
+from transformers import CLIPProcessor, CLIPModel
 
-# Initialize the CLIP model and processor
-clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
-clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
 # Function to extract frames from a video file
-def extract_frames(video_path, num_frames=1):
-    video, _, _ = read_video(video_path, pts_unit='sec')
-    frames = video.permute(0, 3, 1, 2)  # Change to (N, C, H, W) format
-    if len(frames) < num_frames:
-        raise ValueError(f"Video {video_path} has less than {num_frames} frames.")
-    return frames[:num_frames]
+def extract_frames_from_video(video):
+    # Convert the video tensor back to (T, H, W, C)
+    video = video.permute(1, 2, 3, 0)
+    video = video.numpy()
+    
+    # Convert each frame to a NumPy array and add to the frames list
+    frames = [frame.astype(np.uint8) for frame in video]
+    
+    return frames
 
 # Function to preprocess frames
 def preprocess_frames(frames, frame_size):
@@ -27,7 +26,7 @@ def preprocess_frames(frames, frame_size):
         transforms.Resize(frame_size),
         transforms.ToTensor()
     ])
-    return [transform(Image.fromarray(frame.permute(1, 2, 0).numpy())) for frame in frames]
+    return [transform(Image.fromarray(frame)) for frame in frames]
 
 # Function to load the YAML file and extract prompts
 def extract_prompts(file_path):
@@ -37,19 +36,21 @@ def extract_prompts(file_path):
         return prompts
     
 
-def compute_clip_score(generated_videos_folder, prompts_file, frame_size, frames_per_video):    
+def compute_clip_score(generated_videos, prompts_file, frame_size, frames_per_video):
+    # Initialize the CLIP model and processor
+    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    
     # Extract prompts
     prompts = extract_prompts(prompts_file)
 
     # Store all frames and prompts for batch processing
     all_frames = []
     all_prompts = []
-
-    for video_file, prompt in tqdm(zip(sorted(os.listdir(generated_videos_folder)), prompts), total=len(os.listdir(generated_videos_folder))):
-        video_path = os.path.join(generated_videos_folder, video_file)
-        
+    
+    for video, prompt in tqdm(zip(generated_videos, prompts), total=len(generated_videos)):
         # Extract and preprocess frames
-        frames = extract_frames(video_path, frames_per_video)
+        frames = extract_frames_from_video(video)
         preprocessed_frames = preprocess_frames(frames, frame_size)
         
         all_frames.append(preprocessed_frames)
@@ -88,14 +89,3 @@ def compute_clip_score(generated_videos_folder, prompts_file, frame_size, frames
     # Return average CLIP score
     average_clip_score = clip_scores.mean()
     return average_clip_score
-
-
-if __name__ == '__main__':
-    # Folder containing generated videos and corresponding prompts
-    generated_videos_folder = "./provainference"
-    prompts_file = './configs/inference/inference.yaml'
-    frame_size = (128, 128)
-    frames_per_video = 16
-
-    clip_score = compute_clip_score(generated_videos_folder, prompts_file, frame_size, frames_per_video)
-    print(f"Average CLIP Score: {round(clip_score.item(), 5)}")
