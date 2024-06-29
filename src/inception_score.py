@@ -16,6 +16,8 @@ def extract_frames_from_video(video):
     return frames
 
 def compute_is(generated_videos):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
     # Load frames from the generated video folder
     generated_frames = []
     for video in tqdm(generated_videos, total=len(generated_videos)):
@@ -26,14 +28,14 @@ def compute_is(generated_videos):
     # Ensure the frames are in the format (N, 3, H, W)
     generated_frames = torch.stack([
         torch.tensor(frame).permute(2, 0, 1) for frame in tqdm(generated_frames, total=len(generated_frames))
-    ], dim=0).to(torch.uint8)
+    ], dim=0).to(torch.uint8).to(device)
 
     # Initialize the InceptionScore metric
-    inception_score = InceptionScore()
+    inception_score = InceptionScore().to(device)
     
     # Compute IS score
     generated_is_score = inception_score(generated_frames)
     
     is_score, std_deviation = generated_is_score
     
-    return is_score, std_deviation
+    return is_score.item(), std_deviation.item()

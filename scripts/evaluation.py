@@ -76,8 +76,8 @@ clip_score = compute_clip_score(generated_videos, prompts_file, frame_size, fram
 print("\n******************* METRICS RESULTS ************************\n")
 print(f'[RES] FVD:', round(fvd, 5))
 print(f'[RES] FID: {round(fid_score.item(), 5)}')
-print(f'[RES] IS: {round(is_score.item(), 5)}')
-print(f'[RES] IS Standard Deviation: {round(std_deviation.item(), 5)}')
+print(f'[RES] IS: {round(is_score, 5)}')
+print(f'[RES] IS Standard Deviation: {round(std_deviation, 5)}')
 print(f'[RES] CLIP Score: {round(clip_score.item(), 5)}')
 print("**************************************************************")
 
@@ -88,8 +88,8 @@ formatted_datetime = now.strftime('%Y_%m_%d_%H_%M_%S')
 output_strings = [
     f'[RES] FVD: {round(fvd, 5)}\n',
     f'[RES] FID: {round(fid_score.item(), 5)}\n',
-    f'[RES] IS: {round(is_score.item(), 5)}\n',
-    f'[RES] IS Standard Deviation: {round(std_deviation.item(), 5)}\n',
+    f'[RES] IS: {round(is_score, 5)}\n',
+    f'[RES] IS Standard Deviation: {round(std_deviation, 5)}\n',
     f'[RES] CLIP Score: {round(clip_score.item(), 5)}\n'
 ]
 
