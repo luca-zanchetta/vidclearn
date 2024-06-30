@@ -30,7 +30,7 @@ def extract_prompts(file_path):
         prompts = data.get('validation_data', {}).get('prompts', [])
         return prompts
 
-def compute_clip_score(generated_videos, prompts_file, frame_size, frames_per_video):
+def compute_clip_score(generated_videos, prompts_file, frame_size):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Initialize the CLIP model and processor
@@ -43,7 +43,7 @@ def compute_clip_score(generated_videos, prompts_file, frame_size, frames_per_vi
     all_frames = []
     all_prompts = []
 
-    for video, prompt in tqdm(zip(generated_videos, prompts), total=len(generated_videos)):
+    for video, prompt in tqdm(zip(generated_videos, prompts), desc='Extracting Frames', total=len(generated_videos)):
         frames = extract_frames_from_video(video)
         preprocessed_frames = preprocess_frames(frames, frame_size)
         all_frames.append(preprocessed_frames)
@@ -51,7 +51,7 @@ def compute_clip_score(generated_videos, prompts_file, frame_size, frames_per_vi
 
     video_image_features = []
 
-    for frames in tqdm(all_frames, total=len(all_frames)):
+    for frames in tqdm(all_frames, desc='Processing Extracted Frames', total=len(all_frames)):
         frames = torch.stack(frames).to(device)  # Move frames to GPU
         pil_images = [transforms.ToPILImage()(frame.cpu()) for frame in frames]  # Convert to PIL on CPU
         image_inputs = clip_processor(images=pil_images, return_tensors="pt", padding=True, truncation=True).to(device)

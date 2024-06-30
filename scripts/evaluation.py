@@ -70,7 +70,7 @@ is_score, std_deviation = compute_is(generated_videos)
 
 # Compute CLIP score
 print("\n[INFO] Computing CLIP Score [4/4]...")
-clip_score = compute_clip_score(generated_videos, prompts_file, frame_size, frames_per_video)
+clip_score = compute_clip_score(generated_videos, prompts_file, frame_size)
 
 # Metrics recap
 print("\n******************* METRICS RESULTS ************************\n")

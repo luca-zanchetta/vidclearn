@@ -39,7 +39,7 @@ def compute_fvd(real_videos, generated_videos):
     i3d_model = models.video.r3d_18(pretrained=True).to(device)
     i3d_model.eval()
 
-    for real_video, generated_video in tqdm(itertools.zip_longest(real_videos, generated_videos, fillvalue=None), total=len(generated_videos)):
+    for real_video, generated_video in tqdm(itertools.zip_longest(real_videos, generated_videos, fillvalue=None), desc='Processing Videos', total=len(generated_videos)):
         real_feature = extract_features(real_video, i3d_model, device=device)
         generated_feature = extract_features(generated_video, i3d_model, mean=mean, std=std, device=device)
 

@@ -15,26 +15,30 @@ def extract_frames_from_video(video):
     
     return frames
 
-def compute_is(generated_videos):
+def compute_is(generated_videos, batch_size=32):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Load frames from the generated video folder
     generated_frames = []
-    for video in tqdm(generated_videos, total=len(generated_videos)):
+    for video in tqdm(generated_videos, desc="Extracting frames", total=len(generated_videos)):
         frames = extract_frames_from_video(video)
         generated_frames.extend(frames)
-
-    # Convert frames to uint8 tensor directly and scale to [0, 255] range
-    # Ensure the frames are in the format (N, 3, H, W)
-    generated_frames = torch.stack([
-        torch.tensor(frame).permute(2, 0, 1) for frame in tqdm(generated_frames, total=len(generated_frames))
-    ], dim=0).to(torch.uint8).to(device)
 
     # Initialize the InceptionScore metric
     inception_score = InceptionScore().to(device)
     
-    # Compute IS score
-    generated_is_score = inception_score(generated_frames)
+    # Process in batches with a progress bar
+    for i in tqdm(range(0, len(generated_frames), batch_size), desc="Computing Inception Score"):
+        batch = generated_frames[i:i+batch_size]
+        batch_tensors = torch.stack([
+            torch.tensor(frame).permute(2, 0, 1) for frame in batch
+        ], dim=0).to(torch.uint8).to(device)
+        
+        # Update the inception score with the batch
+        inception_score.update(batch_tensors)
+    
+    # Compute the IS score
+    generated_is_score = inception_score.compute()
     
     is_score, std_deviation = generated_is_score
     

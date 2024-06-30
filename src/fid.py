@@ -16,13 +16,13 @@ def compute_fid(real_videos, generated_videos, batch_size=32):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     fid = FrechetInceptionDistance(feature=64).to(device)
     
-    for video in tqdm(real_videos, total=len(real_videos)):
+    for video in tqdm(real_videos, desc='Processing Real Videos', total=len(real_videos)):
         frames = extract_frames_from_video(video)
         for i in range(0, len(frames), batch_size):
             batch = torch.cat(frames[i:i + batch_size])
             fid.update(batch, real=True)
 
-    for video in tqdm(generated_videos, total=len(generated_videos)):
+    for video in tqdm(generated_videos, desc='Processing Generated Videos', total=len(generated_videos)):
         frames = extract_frames_from_video(video)
         for i in range(0, len(frames), batch_size):
             batch = torch.cat(frames[i:i + batch_size])
