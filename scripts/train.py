@@ -34,7 +34,7 @@ from diffusers.utils.import_utils import is_xformers_available
 import transformers
 from transformers import CLIPTextModel, CLIPTokenizer
 
-from animatediff.data.dataset import MSRVTTDataset
+from animatediff.data.dataset import PandaDataset
 from animatediff.models.unet import UNet3DConditionModel
 from animatediff.pipelines.pipeline_animation import AnimationPipeline
 from animatediff.utils.util import save_videos_grid, zero_rank_print
@@ -227,7 +227,7 @@ def main(
     text_encoder.to(local_rank)
 
     # Get the training dataset
-    train_dataset = MSRVTTDataset(**train_data, is_image=image_finetune)
+    train_dataset = PandaDataset(**train_data, is_image=image_finetune)
     distributed_sampler = DistributedSampler(
         train_dataset,
         num_replicas=num_processes,

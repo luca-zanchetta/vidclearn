@@ -12,9 +12,9 @@ noise_scheduler_kwargs:
   clip_sample:         false
 
 train_data:
-  json_path:     "animatediff/data/MSRVTT/annotation/train.json"
-  video_folder: "animatediff/data/MSRVTT/videos/train"
-  sample_size:  256
+  captions_csv_path: "animatediff/data/Panda/captions_training.csv"
+  video_folder:      "animatediff/data/Panda/train"
+  sample_size:       256
 
 validation_data:
   prompts:
