@@ -40,4 +40,7 @@ For properly performing inference with our model, open a terminal in the current
 ```
 $ torchrun --nnodes=1 --nproc_per_node=1 inference.py --config configs/inference/inference.yaml
 ```
-You can obviously change the values for *--nnodes* and *--nproc_per_node* according to your specific needs and capabilities. You will find results in *folder_missing*.
+You can obviously change the values for *--nnodes* and *--nproc_per_node* according to your specific needs and capabilities. You will find results in *inference_samples* folder.
+
+## Evaluation
+*Work in progress...*
