@@ -10,15 +10,15 @@ Here's a detailed guide on how to download and setup the [Panda-70M](https://sna
 - Ensure your device is not going to be shutdown;
 - Launch the following commands:
 ```
-$ python panda_dataset.py --directory train --csv_filename panda70m_training_2m.csv --captions_filename train/captions_training.csv
+$ python panda_dataset.py --directory Panda/train --csv_filename panda70m_training_2m.csv --captions_filename train/captions_training.csv
 ```
 
 ```
-$ python panda_dataset.py --directory validation --csv_filename panda70m_validation.csv --captions_filename validation/captions_validation.csv
+$ python panda_dataset.py --directory Panda/validation --csv_filename panda70m_validation.csv --captions_filename validation/captions_validation.csv
 ```
 
 ```
-$ python panda_dataset.py --directory test --csv_filename panda70m_testing.csv --captions_filename test/captions_testing.csv
+$ python panda_dataset.py --directory Panda/test --csv_filename panda70m_testing.csv --captions_filename test/captions_testing.csv
 ```
 
 If some of the provided links has expired, please refer to the original [webpage](https://snap-research.github.io/Panda-70M/) and download the CSV files manually. If you encounter any issue, feel free to contact us by
