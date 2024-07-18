@@ -12,9 +12,9 @@ noise_scheduler_kwargs:
   clip_sample:         false
 
 train_data:
-  captions_csv_path: "animatediff/data/Panda/captions_training.csv"
-  video_folder:      "animatediff/data/Panda/train"
-  sample_size:       256
+  csv_path:     "path_to_csv_file"
+  video_folder: "path_to_video_foler"
+  sample_size:  256
 
 validation_data:
   prompts:
@@ -33,10 +33,10 @@ unet_checkpoint_path: ""
 learning_rate:    1.e-5
 train_batch_size: 50
 
-max_train_epoch:      1
-max_train_steps:      -1
-checkpointing_epochs: 1
-checkpointing_steps:  -1
+max_train_epoch:      -1
+max_train_steps:      100
+checkpointing_epochs: -1
+checkpointing_steps:  60
 
 validation_steps:       5000
 validation_steps_tuple: [2, 50]
