@@ -10,7 +10,7 @@ safetensors
 gradio==3.36.1
 wandb
 torchvision==0.18.1
-torchaudio==0.13.1
+torchaudio
 torch==2.3.1
 accelerate
 opencv-python
