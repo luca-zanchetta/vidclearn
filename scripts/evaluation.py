@@ -36,8 +36,8 @@ def load_video(video_path, num_frames=16, frame_size=(256, 256)):
 
 
 # Hyperparameters
-real_videos_folder = './animatediff/data/MSRVTT/videos/test'
-generated_videos_folder = './inference_samples/inference_samples_1/inference/samples'
+real_videos_folder = './animatediff/data/Panda/test'
+generated_videos_folder = './inference_samples/inference_samples_1/samples'
 prompts_file = './configs/inference/inference.yaml'
 num_videos_tot = len(os.listdir(real_videos_folder))
 frame_size = (128, 128)

@@ -34,8 +34,9 @@ def main(args):
     func_args = dict(func_args)
     
     time_str = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    savedir = f"samples/{Path(args.config).stem}-{time_str}"
-    os.makedirs(savedir)
+    # savedir = f"samples/{Path(args.config).stem}-{time_str}"
+    savedir = f"inference_samples/inference_samples_1"
+    os.makedirs(savedir, exist_ok=True)
 
     config  = OmegaConf.load(args.config)
     samples = []
@@ -139,14 +140,15 @@ def main(args):
         ).to("cuda")
 
         prompts      = model_config.prompt
-        n_prompts    = list(model_config.n_prompt) * len(prompts) if len(model_config.n_prompt) == 1 else model_config.n_prompt
+        # n_prompts    = list(model_config.n_prompt) * len(prompts) if len(model_config.n_prompt) == 1 else model_config.n_prompt
         
         random_seeds = model_config.get("seed", [-1])
         random_seeds = [random_seeds] if isinstance(random_seeds, int) else list(random_seeds)
         random_seeds = random_seeds * len(prompts) if len(random_seeds) == 1 else random_seeds
         
         config[model_idx].random_seed = []
-        for prompt_idx, (prompt, n_prompt, random_seed) in enumerate(zip(prompts, n_prompts, random_seeds)):
+        # for prompt_idx, (prompt, n_prompt, random_seed) in enumerate(zip(prompts, n_prompts, random_seeds)):
+        for prompt_idx, (prompt, random_seed) in enumerate(zip(prompts, random_seeds)):
             
             # manually set random seed for reproduction
             if random_seed != -1: torch.manual_seed(random_seed)
@@ -157,7 +159,7 @@ def main(args):
             print(f"sampling {prompt} ...")
             sample = pipeline(
                 prompt,
-                negative_prompt     = n_prompt,
+                # negative_prompt     = n_prompt,
                 num_inference_steps = model_config.steps,
                 guidance_scale      = model_config.guidance_scale,
                 width               = model_config.W,
@@ -170,13 +172,13 @@ def main(args):
             samples.append(sample)
 
             prompt = "-".join((prompt.replace("/", "").split(" ")[:10]))
-            save_videos_grid(sample, f"{savedir}/sample/{sample_idx}-{prompt}.gif")
-            print(f"save to {savedir}/sample/{prompt}.gif")
+            save_videos_grid(sample, f"{savedir}/samples/sample-{sample_idx}.mp4")
+            print(f"save to {savedir}/samples/sample-{sample_idx}.mp4")
             
             sample_idx += 1
 
     samples = torch.concat(samples)
-    save_videos_grid(samples, f"{savedir}/sample.gif", n_rows=4)
+    save_videos_grid(samples, f"{savedir}/sample.mp4", n_rows=4)
 
     OmegaConf.save(config, f"{savedir}/config.yaml")
 

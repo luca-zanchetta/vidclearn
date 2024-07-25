@@ -1,6 +1,6 @@
 image_finetune: true
 
-output_dir: "outputs"
+output_dir: "models/Unet"
 pretrained_model_path: "models/StableDiffusion/stable-diffusion-v1-5"
 
 noise_scheduler_kwargs:
@@ -12,8 +12,8 @@ noise_scheduler_kwargs:
   clip_sample:         false
 
 train_data:
-  csv_path:     "path_to_csv_file"
-  video_folder: "path_to_video_foler"
+  csv_path:        "./animatediff/data/Panda/captions_training.csv"
+  video_folder:    "./animatediff/data/Panda/train"
   sample_size:  256
 
 validation_data:

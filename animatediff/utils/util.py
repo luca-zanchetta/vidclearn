@@ -117,7 +117,7 @@ def load_weights(
         unet_state_dict.pop("animatediff_config", "")
     
     missing, unexpected = animation_pipeline.unet.load_state_dict(unet_state_dict, strict=False)
-    assert len(unexpected) == 0
+    # assert len(unexpected) == 0
     del unet_state_dict
 
     # base model

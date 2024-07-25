@@ -77,13 +77,13 @@ class MSRVTTDataset(Dataset):
 class PandaDataset(Dataset):
     def __init__(
             self,
-            captions_csv_path, video_folder,
+            csv_path, video_folder,
             sample_size=128, sample_stride=4, sample_n_frames=8,
             is_image=False,
         ):
-        zero_rank_print(f"loading annotations from {captions_csv_path} ...")
+        zero_rank_print(f"loading annotations from {csv_path} ...")
         self.dataset = []
-        with open(captions_csv_path, mode='r', newline='', encoding='utf-8') as csvfile:
+        with open(csv_path, mode='r', newline='', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
                 self.dataset.append(row)
