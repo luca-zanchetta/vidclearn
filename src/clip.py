@@ -2,7 +2,7 @@ import torch
 import torchvision.transforms as transforms
 import yaml
 import numpy as np
-
+ 
 from PIL import Image
 from torch.nn.functional import cosine_similarity
 from tqdm import tqdm
