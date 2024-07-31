@@ -7,17 +7,14 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Install nano package for live editing
+# Install nano package for live editing & update certificates
 RUN apt-get update
 RUN apt-get install nano
 
-# Install tmux for keeping terminal sessions alive
-RUN apt-get install -y tmux
-
 # Install required parts of OpenGL library
-RUN apt-get install -y libgl1-mesa-glx
-RUN apt-get install -y libglib2.0-0
+# RUN apt-get install -y libgl1-mesa-glx
+# RUN apt-get install -y libglib2.0-0
 
-# Install any additional Python dependencies if needed
+# Install additional Python dependencies
 RUN pip install -r requirements.txt
-RUN pip install "jax[cuda12_pip]==0.4.23" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# RUN pip install "jax[cuda12_pip]==0.4.23" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
