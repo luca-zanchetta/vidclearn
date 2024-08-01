@@ -1,97 +1,63 @@
-import os
-import datetime
-import torch
-import numpy as np
-import cv2
-
-from src.fvd import compute_fvd
-from src.fid import compute_fid
-from src.inception_score import compute_is
+from src.utils import load_video
+from src.ssim import compute_ssim
+from src.psnr import compute_psnr
 from src.clip import compute_clip_score
-from tqdm import tqdm
-
-# Function to load and preprocess video
-def load_video(video_path, num_frames=16, frame_size=(256, 256)):
-    cap = cv2.VideoCapture(video_path)
-    frames = []
-    while len(frames) < num_frames and cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame = cv2.resize(frame, frame_size)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(frame)
-    cap.release()
-    
-    if len(frames) == 0:
-        return None  # Return None if no frames were read
-    
-    # If video has fewer frames than num_frames, pad with the last frame
-    while len(frames) < num_frames:
-        frames.append(frames[-1])
-    
-    video = np.array(frames, dtype=np.uint8)
-    video = torch.tensor(video, dtype=torch.uint8)
-    return video.permute(3, 0, 1, 2)  # Convert to (C, T, H, W)
+from src.fwe import compute_fwe
+from src.of_consistency import compute_video_optical_flow, compute_optical_flow_consistency
 
 
 # Hyperparameters
-real_videos_folder = './animatediff/data/Panda/test'
-generated_videos_folder = './inference_samples/inference_samples_1/samples'
-prompts_file = './configs/inference/inference.yaml'
-num_videos_tot = len(os.listdir(real_videos_folder))
-frame_size = (128, 128)
-frames_per_video = 16
+real_video_path = './data/man-skiing.mp4'
+generated_video_path = './inference_samples/1.gif'
+prompt = 'spider man is skiing'
+frame_size = (512, 512)
+frames_per_video = 24
+
 
 # Load videos
-print("\n[INFO] Loading real videos...")
-real_videos = []
-for path in tqdm(os.listdir(real_videos_folder), total=len(os.listdir(real_videos_folder))):
-    video_path = os.path.join(real_videos_folder, path)
-    real_videos.append(load_video(video_path, frames_per_video, frame_size))
+print(f"\n[INFO] Loading real video from {real_video_path}...")
+real_video = load_video(real_video_path, frames_per_video, frame_size)
+if real_video is None:
+    print("[ERROR] Loading real video was not successful.")
 
-print("\n[INFO] Loading generated videos...")
-generated_videos = []
-for path in tqdm(os.listdir(generated_videos_folder), total=len(os.listdir(generated_videos_folder))):
-    video_path = os.path.join(generated_videos_folder, path)
-    generated_videos.append(load_video(video_path, frames_per_video, frame_size))
+print(f"\n[INFO] Loading generated video from {generated_video_path}...")
+generated_video = load_video(generated_video_path, frames_per_video, frame_size)
+if generated_video is None:
+    print("[ERROR] Loading generated video was not successful.")
 
-# Compute FVD
-print("\n[INFO] Computing FVD [1/4]...")
-fvd = compute_fvd(real_videos, generated_videos)
 
-# Compute FID
-print("\n[INFO] Computing FID [2/4]...")
-fid_score = compute_fid(real_videos, generated_videos)
+# Compute Average SSIM Score:
+print("\n[INFO] Computing SSIM Score [1/5]...")
+ssim_score = compute_ssim(generated_video, real_video, frame_size)
 
-# Compute IS
-print("\n[INFO] Computing Inception Score [3/4]...")
-is_score, std_deviation = compute_is(generated_videos)
+
+# Compute PSNR:
+print("\n[INFO] Computing PSNR [2/5]...")
+psnr = compute_psnr(generated_video, real_video)
+
 
 # Compute CLIP score
-print("\n[INFO] Computing CLIP Score [4/4]...")
-clip_score = compute_clip_score(generated_videos, prompts_file, frame_size)
+print("\n[INFO] Computing CLIP Score [3/5]...")
+clip_score = compute_clip_score(generated_video, prompt, frame_size)
+
+
+# Compute Flow Warping Error
+print("\n[INFO] Computing Flow Warping Error [4/5]...")
+fwe = compute_fwe(generated_video, real_video, frame_size)
+
+
+# Compute Optical Flow Consistency
+print("\n[INFO] Computing Optical Flow Consistency [5/5]...")
+generated_flows = compute_video_optical_flow(generated_video)
+reference_flows = compute_video_optical_flow(real_video)
+consistency_metric = compute_optical_flow_consistency(generated_flows, reference_flows)
+
 
 # Metrics recap
 print("\n******************* METRICS RESULTS ************************\n")
-print(f'[RES] FVD:', round(fvd, 5))
-print(f'[RES] FID: {round(fid_score.item(), 5)}')
-print(f'[RES] IS: {round(is_score, 5)}')
-print(f'[RES] IS Standard Deviation: {round(std_deviation, 5)}')
+print(f'[RES] SSIM: {round(ssim_score, 5)}')
+print(f'[RES] PSNR: {round(psnr.item(), 5)} dB')
 print(f'[RES] CLIP Score: {round(clip_score.item(), 5)}')
+print(f'[RES] Flow Warping Error: {round(fwe, 5)}')
+print(f'[RES] Optical Flow Consistency: {round(consistency_metric, 5)}')
 print("**************************************************************")
-
-# Save results
-now =  datetime.datetime.now()
-formatted_datetime = now.strftime('%Y_%m_%d_%H_%M_%S')
-
-output_strings = [
-    f'[RES] FVD: {round(fvd, 5)}\n',
-    f'[RES] FID: {round(fid_score.item(), 5)}\n',
-    f'[RES] IS: {round(is_score, 5)}\n',
-    f'[RES] IS Standard Deviation: {round(std_deviation, 5)}\n',
-    f'[RES] CLIP Score: {round(clip_score.item(), 5)}\n'
-]
-
-with open(f'./evaluation_results/metrics_{formatted_datetime}.txt', 'w') as file:
-    file.writelines(output_strings)

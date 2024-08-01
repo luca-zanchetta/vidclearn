@@ -12,3 +12,8 @@ einops
 imageio
 ftfy
 xformers==0.0.16
+opencv-python
+pytorch-msssim
+imageio[ffmpeg]
+imageio[pyav]
+torchmetrics
