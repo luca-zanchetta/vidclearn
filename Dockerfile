@@ -17,4 +17,3 @@ RUN apt-get install -y libglib2.0-0
 
 # Install additional Python dependencies
 RUN pip install -r requirements.txt
-# RUN pip install "jax[cuda12_pip]==0.4.23" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html

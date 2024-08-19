@@ -55,9 +55,9 @@ consistency_metric = compute_optical_flow_consistency(generated_flows, reference
 
 # Metrics recap
 print("\n******************* METRICS RESULTS ************************\n")
+print(f'[RES] CLIP Score: {round(clip_score.item(), 5)}')
 print(f'[RES] SSIM: {round(ssim_score, 5)}')
 print(f'[RES] PSNR: {round(psnr.item(), 5)} dB')
-print(f'[RES] CLIP Score: {round(clip_score.item(), 5)}')
 print(f'[RES] Flow Warping Error: {round(fwe, 5)}')
 print(f'[RES] Optical Flow Consistency: {round(consistency_metric, 5)}')
 print("**************************************************************")
