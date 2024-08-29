@@ -1,4 +1,4 @@
-# lightweight-text-to-video
+# continual-text-to-video
 
 The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video)
 
@@ -6,11 +6,11 @@ The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video)
 
 The first thing you can do is cloning our repository, by launching the following command:
 ```
-$ git clone https://github.com/luca-zanchetta/lightweight-text-to-video/tree/main
+$ git clone https://github.com/luca-zanchetta/continual-text-to-video/tree/main
 ```
 Then, launch the following command:
 ```
-$ cd lightweight-text-to-video
+$ cd continual-text-to-video
 ```
 
 ### Download Dataset
