@@ -14,11 +14,14 @@ i = 1
 
 with open(prompt_file, 'r') as file:
     lines = file.readlines()
-    for line in lines:
-        curr_video_name = line.split('/')[3]
-        succ_video_name = lines[i].split('/')[3]
+    for line in tqdm(lines, desc='Processing...'):
+        try:
+            curr_video_name = line.split('/')[3]
+            succ_video_name = lines[i].split('/')[3]
+        except Exception as err:
+            succ_video_name = ""
 
-        if i+1 <= len(lines):
+        if (i+1) <= len(lines):
             i += 1
 
         if curr_video_name == succ_video_name:
@@ -34,7 +37,7 @@ with open(prompt_file, 'r') as file:
             # Compute CLIP Score
             index_max_score = 0
             max_score = 0
-            for prompt in tqdm(prompts, desc='Computing CLIP Scores...'):
+            for prompt in tqdm(prompts, desc='Computing CLIP Score...'):
                 clip_score = compute_clip_score(video, prompt, frame_size)
                 if clip_score > max_score:
                     max_score = clip_score
