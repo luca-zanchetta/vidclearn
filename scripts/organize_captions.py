@@ -46,6 +46,6 @@ with open(prompt_file, 'r') as file:
             # Save prompt having the maximum CLIP Score
             final_prompt = prompts[index_max_score]
             with open(output_file, 'a') as out:
-                out.write(f"{video_path}:{final_prompt}\n")
+                out.write(f"{curr_video_name}.mp4:{final_prompt}\n")
             
             prompts = []

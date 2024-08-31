@@ -12,7 +12,9 @@ class InflatedConv3d(nn.Conv2d):
         video_length = x.shape[2]
 
         x = rearrange(x, "b c f h w -> (b f) c h w")
-        x = super().forward(x)
+        with torch.cuda.amp.autocast(enabled=False):
+            # Apply the convolution in float32 to avoid precision issues
+            x = super().forward(x.float())
         x = rearrange(x, "(b f) c h w -> b c f h w", f=video_length)
 
         return x
