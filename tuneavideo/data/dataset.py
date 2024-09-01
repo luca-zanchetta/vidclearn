@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 from einops import rearrange
 from transformers import CLIPTokenizer
 
-class TuneAVideoDataset(Dataset):
+class ContinualTuneAVideoDataset(Dataset):
     def __init__(
             self,
             pretrained_model_path: str,

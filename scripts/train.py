@@ -24,7 +24,7 @@ from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 
 from tuneavideo.models.unet import UNet3DConditionModel
-from tuneavideo.data.dataset import TuneAVideoDataset
+from tuneavideo.data.dataset import ContinualTuneAVideoDataset
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
@@ -48,7 +48,8 @@ def main(
         "attn_temp",
     ),
     train_batch_size: int = 1,
-    max_train_steps: int = 500,
+    num_steps_per_sample: int = 500,
+    num_epochs: int = 1,
     learning_rate: float = 3e-5,
     scale_lr: bool = False,
     lr_scheduler: str = "constant",
@@ -154,7 +155,7 @@ def main(
     )
 
     # Get the training dataset
-    train_dataset = TuneAVideoDataset(**train_data)
+    train_dataset = ContinualTuneAVideoDataset(**train_data)
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
@@ -169,6 +170,11 @@ def main(
     validation_pipeline.enable_vae_slicing()
     ddim_inv_scheduler = DDIMScheduler.from_pretrained(pretrained_model_path, subfolder='scheduler')
     ddim_inv_scheduler.set_timesteps(validation_data.num_inv_steps)
+    
+    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) * num_steps_per_sample / gradient_accumulation_steps)
+    # Afterwards we recalculate our number of training epochs
+    max_train_steps = num_epochs * num_update_steps_per_epoch
 
     # Scheduler
     lr_scheduler = get_scheduler(
@@ -195,11 +201,6 @@ def main(
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     vae.to(accelerator.device, dtype=weight_dtype)
 
-    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
-    # Afterwards we recalculate our number of training epochs
-    num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
-
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -210,7 +211,8 @@ def main(
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
-    logger.info(f"  Num Epochs = {num_train_epochs}")
+    logger.info(f"  Num Epochs = {num_epochs}")
+    logger.info(f"  Num train steps per sample = {num_steps_per_sample}")
     logger.info(f"  Instantaneous batch size per device = {train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
@@ -239,7 +241,7 @@ def main(
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    for epoch in range(first_epoch, num_train_epochs):
+    for epoch in range(first_epoch, num_epochs):
         unet.train()
         train_loss = 0.0
         for step, batch in enumerate(train_dataloader):
