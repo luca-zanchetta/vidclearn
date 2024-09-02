@@ -18,3 +18,4 @@ imageio[ffmpeg]
 imageio[pyav]
 torchmetrics
 scipy
+torchmetrics[image]

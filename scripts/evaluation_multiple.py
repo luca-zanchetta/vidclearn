@@ -4,7 +4,7 @@ import datetime
 from src.fvd import compute_fvd
 from src.fid import compute_fid
 from src.inception_score import compute_is
-from src.clip import compute_clip_score
+from src.clip_multiple import compute_clip_score
 from src.utils import load_video
 from tqdm import tqdm
 
