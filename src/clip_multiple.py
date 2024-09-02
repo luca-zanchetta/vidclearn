@@ -25,9 +25,15 @@ def preprocess_frames(frames, frame_size):
 
 # Function to load the YAML file and extract prompts
 def extract_prompts(file_path):
+    prompts = []
+    
     with open(file_path, 'r') as file:
-        data = yaml.safe_load(file)
-        prompts = data.get('validation_data', {}).get('prompts', [])
+        lines = file.readlines()
+        
+        for line in tqdm(lines, desc='Extracting prompts'):
+            video_name, prompt = line.strip().split(':')
+            prompts.append(prompt)
+        
         return prompts
 
 def compute_clip_score(generated_videos, prompts_file, frame_size):

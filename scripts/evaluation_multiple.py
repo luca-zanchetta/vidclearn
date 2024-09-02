@@ -1,47 +1,21 @@
 import os
 import datetime
-import torch
-import numpy as np
-import cv2
 
 from src.fvd import compute_fvd
 from src.fid import compute_fid
 from src.inception_score import compute_is
 from src.clip import compute_clip_score
+from src.utils import load_video
 from tqdm import tqdm
 
-# Function to load and preprocess video
-def load_video(video_path, num_frames=16, frame_size=(256, 256)):
-    cap = cv2.VideoCapture(video_path)
-    frames = []
-    while len(frames) < num_frames and cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        frame = cv2.resize(frame, frame_size)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frames.append(frame)
-    cap.release()
-    
-    if len(frames) == 0:
-        return None  # Return None if no frames were read
-    
-    # If video has fewer frames than num_frames, pad with the last frame
-    while len(frames) < num_frames:
-        frames.append(frames[-1])
-    
-    video = np.array(frames, dtype=np.uint8)
-    video = torch.tensor(video, dtype=torch.uint8)
-    return video.permute(3, 0, 1, 2)  # Convert to (C, T, H, W)
-
-
 # Hyperparameters
-real_videos_folder = './animatediff/data/Panda/test'
-generated_videos_folder = './inference_samples/inference_samples_1/samples'
-prompts_file = './configs/inference/inference.yaml'
+test_n = 1
+real_videos_folder = './data/test_videos'
+generated_videos_folder = f'./inference_samples/inference_samples_{test_n}/'
+prompts_file = './data/test_captions.txt'
 num_videos_tot = len(os.listdir(real_videos_folder))
-frame_size = (128, 128)
-frames_per_video = 16
+frame_size = (512, 512)
+frames_per_video = 24
 
 # Load videos
 print("\n[INFO] Loading real videos...")
@@ -77,21 +51,20 @@ print("\n******************* METRICS RESULTS ************************\n")
 print(f'[RES] FVD:', round(fvd, 5))
 print(f'[RES] FID: {round(fid_score.item(), 5)}')
 print(f'[RES] IS: {round(is_score, 5)}')
-print(f'[RES] IS Standard Deviation: {round(std_deviation, 5)}')
 print(f'[RES] CLIP Score: {round(clip_score.item(), 5)}')
 print("**************************************************************")
 
 # Save results
-now =  datetime.datetime.now()
-formatted_datetime = now.strftime('%Y_%m_%d_%H_%M_%S')
+# now =  datetime.datetime.now()
+# formatted_datetime = now.strftime('%Y_%m_%d_%H_%M_%S')
 
-output_strings = [
-    f'[RES] FVD: {round(fvd, 5)}\n',
-    f'[RES] FID: {round(fid_score.item(), 5)}\n',
-    f'[RES] IS: {round(is_score, 5)}\n',
-    f'[RES] IS Standard Deviation: {round(std_deviation, 5)}\n',
-    f'[RES] CLIP Score: {round(clip_score.item(), 5)}\n'
-]
+# output_strings = [
+#     f'[RES] FVD: {round(fvd, 5)}\n',
+#     f'[RES] FID: {round(fid_score.item(), 5)}\n',
+#     f'[RES] IS: {round(is_score, 5)}\n',
+#     f'[RES] IS Standard Deviation: {round(std_deviation, 5)}\n',
+#     f'[RES] CLIP Score: {round(clip_score.item(), 5)}\n'
+# ]
 
-with open(f'./evaluation_results/metrics_{formatted_datetime}.txt', 'w') as file:
-    file.writelines(output_strings)
+# with open(f'./evaluation_results/metrics_{formatted_datetime}.txt', 'w') as file:
+#     file.writelines(output_strings)
