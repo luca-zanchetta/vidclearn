@@ -51,7 +51,7 @@ print("\n******************* METRICS RESULTS ************************\n")
 print(f'[RES] FVD:', round(fvd, 5))
 print(f'[RES] FID: {round(fid_score.item(), 5)}')
 print(f'[RES] IS: {round(is_score, 5)}')
-print(f'[RES] CLIP Score: {round(clip_score.item(), 5)}')
+print(f'[RES] CLIP Score: {round(clip_score.item()*100, 5)}')
 print("**************************************************************")
 
 # Save results
