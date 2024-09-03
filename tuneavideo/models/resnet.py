@@ -14,7 +14,7 @@ class InflatedConv3d(nn.Conv2d):
         x = rearrange(x, "b c f h w -> (b f) c h w")
         
         # Avoid precision issues
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.cuda.amp.autocast(enabled=True):
             x = super().forward(x)
         
         x = rearrange(x, "(b f) c h w -> b c f h w", f=video_length)

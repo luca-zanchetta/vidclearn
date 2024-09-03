@@ -1,18 +1,16 @@
 import argparse
-import datetime
 import logging
 import inspect
 import math
 import os
-from typing import Dict, Optional, Tuple
-from omegaconf import OmegaConf
-
 import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
-
 import diffusers
 import transformers
+
+from typing import Dict, Optional, Tuple
+from omegaconf import OmegaConf
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from accelerate.utils import set_seed
@@ -22,9 +20,8 @@ from diffusers.utils import check_min_version
 from diffusers.utils.import_utils import is_xformers_available
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
-
 from tuneavideo.models.unet import UNet3DConditionModel
-from tuneavideo.data.dataset import ContinualTuneAVideoDataset
+from tuneavideo.data.dataset import TuneAVideoDataset
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
@@ -32,7 +29,6 @@ from einops import rearrange
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
-
 logger = get_logger(__name__, log_level="INFO")
 
 
@@ -40,6 +36,8 @@ def main(
     pretrained_model_path: str,
     output_dir: str,
     train_data: Dict,
+    video_path: str,
+    prompt_dataset: str,
     validation_data: Dict,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
@@ -48,8 +46,7 @@ def main(
         "attn_temp",
     ),
     train_batch_size: int = 1,
-    num_steps_per_sample: int = 500,
-    num_epochs: int = 1,
+    max_train_steps: int = 500,
     learning_rate: float = 3e-5,
     scale_lr: bool = False,
     lr_scheduler: str = "constant",
@@ -155,11 +152,24 @@ def main(
     )
 
     # Get the training dataset
-    train_dataset = ContinualTuneAVideoDataset(**train_data)
+    train_dataset = TuneAVideoDataset(
+        video_path = video_path,
+        prompt = prompt_dataset,
+        width = train_data.width,
+        height = train_data.height,
+        n_sample_frames = train_data.n_sample_frames,
+        sample_start_idx = train_data.sample_start_idx,
+        sample_frame_rate = train_data.sample_frame_rate
+    )
+
+    # Preprocessing the dataset
+    train_dataset.prompt_ids = tokenizer(
+        train_dataset.prompt, max_length=tokenizer.model_max_length, padding="max_length", truncation=True, return_tensors="pt"
+    ).input_ids[0]
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=train_batch_size, shuffle=True
+        train_dataset, batch_size=train_batch_size
     )
 
     # Get the validation pipeline
@@ -170,11 +180,6 @@ def main(
     validation_pipeline.enable_vae_slicing()
     ddim_inv_scheduler = DDIMScheduler.from_pretrained(pretrained_model_path, subfolder='scheduler')
     ddim_inv_scheduler.set_timesteps(validation_data.num_inv_steps)
-    
-    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) * num_steps_per_sample / gradient_accumulation_steps)
-    # Afterwards we recalculate our number of training epochs
-    max_train_steps = num_epochs * num_update_steps_per_epoch
 
     # Scheduler
     lr_scheduler = get_scheduler(
@@ -201,6 +206,11 @@ def main(
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     vae.to(accelerator.device, dtype=weight_dtype)
 
+    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
+    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
+    # Afterwards we recalculate our number of training epochs
+    num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
+
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
@@ -211,8 +221,7 @@ def main(
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
-    logger.info(f"  Num Epochs = {num_epochs}")
-    logger.info(f"  Num train steps per sample = {num_steps_per_sample}")
+    logger.info(f"  Num Epochs = {num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {train_batch_size}")
     logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
     logger.info(f"  Gradient Accumulation steps = {gradient_accumulation_steps}")
@@ -230,6 +239,7 @@ def main(
             dirs = [d for d in dirs if d.startswith("checkpoint")]
             dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
             path = dirs[-1]
+            
         accelerator.print(f"Resuming from checkpoint {path}")
         accelerator.load_state(os.path.join(output_dir, path))
         global_step = int(path.split("-")[1])
@@ -241,7 +251,7 @@ def main(
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
 
-    for epoch in range(first_epoch, num_epochs):
+    for epoch in range(first_epoch, num_train_epochs):
         unet.train()
         train_loss = 0.0
         for step, batch in enumerate(train_dataloader):
@@ -268,6 +278,7 @@ def main(
                 timesteps = timesteps.long()
 
                 # Add noise to the latents according to the noise magnitude at each timestep
+                # (this is the forward diffusion process)
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                 # Get the text embedding for conditioning
@@ -355,9 +366,90 @@ def main(
     accelerator.end_training()
 
 
+def continual_training(
+    pretrained_model_path: str,
+    output_dir: str,
+    video_dir: str,
+    prompt_file: str,
+    train_data: Dict,
+    validation_data: Dict,
+    validation_steps: int = 100,
+    trainable_modules: Tuple[str] = (
+        "attn1.to_q",
+        "attn2.to_q",
+        "attn_temp",
+    ),
+    train_batch_size: int = 1,
+    train_steps_per_video: int = 500,
+    learning_rate: float = 3e-5,
+    scale_lr: bool = False,
+    lr_scheduler: str = "constant",
+    lr_warmup_steps: int = 0,
+    adam_beta1: float = 0.9,
+    adam_beta2: float = 0.999,
+    adam_weight_decay: float = 1e-2,
+    adam_epsilon: float = 1e-08,
+    max_grad_norm: float = 1.0,
+    gradient_accumulation_steps: int = 1,
+    gradient_checkpointing: bool = True,
+    checkpointing_steps: int = 500,
+    resume_from_checkpoint: Optional[str] = None,
+    mixed_precision: Optional[str] = "fp16",
+    use_8bit_adam: bool = False,
+    enable_xformers_memory_efficient_attention: bool = True,
+    seed: Optional[int] = None,
+):
+    i = 1
+    max_train_steps = train_steps_per_video
+    
+    with open(prompt_file, 'r') as f:
+        lines = f.readlines()
+        
+        for line in tqdm(lines, desc=f'Tuning on video {i}'):
+            if i == 1:
+                resume_from_checkpoint = None
+            else:
+                resume_from_checkpoint = "latest"
+                max_train_steps += train_steps_per_video
+            
+            video_name, prompt_dataset = line.strip().split(':')
+            video_path = os.path.join(video_dir, video_name)
+            
+            main(
+                pretrained_model_path = pretrained_model_path,
+                output_dir = output_dir,
+                train_data = train_data,
+                video_path = video_path,
+                prompt_dataset = prompt_dataset,
+                validation_data = validation_data,
+                validation_steps = validation_steps,
+                trainable_modules = trainable_modules,
+                train_batch_size = train_batch_size,
+                max_train_steps = max_train_steps,
+                learning_rate = learning_rate,
+                scale_lr = scale_lr,
+                lr_scheduler = lr_scheduler,
+                lr_warmup_steps = lr_warmup_steps,
+                adam_beta1 = adam_beta1,
+                adam_beta2 = adam_beta2,
+                adam_weight_decay = adam_weight_decay,
+                adam_epsilon = adam_epsilon,
+                max_grad_norm = max_grad_norm,
+                gradient_accumulation_steps = gradient_accumulation_steps,
+                gradient_checkpointing = gradient_checkpointing,
+                checkpointing_steps = checkpointing_steps,
+                resume_from_checkpoint = resume_from_checkpoint,
+                mixed_precision = mixed_precision,
+                use_8bit_adam = use_8bit_adam,
+                enable_xformers_memory_efficient_attention = enable_xformers_memory_efficient_attention,
+                seed = seed,
+            )
+            i += 1
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="./configs/tuneavideo.yaml")
     args = parser.parse_args()
-
-    main(**OmegaConf.load(args.config))
+    
+    continual_training(**OmegaConf.load(args.config))
