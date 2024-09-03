@@ -1,8 +1,8 @@
 pretrained_model_path: "./checkpoints/stable-diffusion-v1-4"
 output_dir: "./final_model"
 
-video_dir: "data/prova"
-prompt_file: "data/prova_captions.txt"
+video_dir: "data/train_videos"
+prompt_file: "data/train_captions.txt"
 
 train_data:
   pretrained_model_path: "./checkpoints/stable-diffusion-v1-4"
@@ -21,16 +21,16 @@ validation_data:
   video_length: 24
   width: 512
   height: 512
-  num_inference_steps: 1
+  num_inference_steps: 50
   guidance_scale: 12.5
   use_inv_latent: True
   num_inv_steps: 50
 
 learning_rate: 3e-5
 train_batch_size: 1
-train_steps_per_video: 2
-checkpointing_steps: 2
-validation_steps: 2
+train_steps_per_video: 500
+checkpointing_steps: 500
+validation_steps: 100
 trainable_modules:
   - "attn1.to_q"
   - "attn2.to_q"
