@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import torch.utils.checkpoint
 import diffusers
 import transformers
+import gc
 
 from typing import Dict, Optional, Tuple
 from omegaconf import OmegaConf
@@ -36,6 +37,7 @@ def main(
     pretrained_model_path: str,
     output_dir: str,
     train_data: Dict,
+    model_n: int,
     video_path: str,
     prompt_dataset: str,
     validation_data: Dict,
@@ -95,6 +97,7 @@ def main(
         # now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         # output_dir = os.path.join(output_dir, now)
         os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(output_dir + f"/model-{model_n}", exist_ok=True)
         os.makedirs(f"{output_dir}/samples", exist_ok=True)
         os.makedirs(f"{output_dir}/inv_latents", exist_ok=True)
         OmegaConf.save(config, os.path.join(output_dir, 'config.yaml'))
@@ -169,7 +172,7 @@ def main(
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=train_batch_size
+        train_dataset, batch_size=train_batch_size, pin_memory=True, prefetch_factor=2
     )
 
     # Get the validation pipeline
@@ -269,6 +272,10 @@ def main(
                 latents = vae.encode(pixel_values).latent_dist.sample()
                 latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
                 latents = latents * 0.18215
+                
+                if latents.shape[2] < train_data.n_sample_frames:
+                    padding_value = train_data.n_sample_frames - latents.shape[2]
+                    latents = F.pad(latents, (0, 0, 0, 0, padding_value, 0), "constant", 0)
 
                 # Sample noise that we'll add to the latents
                 noise = torch.randn_like(latents)
@@ -344,9 +351,15 @@ def main(
                         save_path = f"{output_dir}/samples/sample-{global_step}.gif"
                         save_videos_grid(samples, save_path)
                         logger.info(f"Saved samples to {save_path}")
+                    
+                        # Garbage collection
+                        del samples, ddim_inv_latent, generator, batch, encoder_hidden_states
+                        torch.cuda.empty_cache()
+                        gc.collect()
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
+            del latents, noisy_latents, target, model_pred, loss
 
             if global_step >= max_train_steps:
                 break
@@ -361,9 +374,14 @@ def main(
             vae=vae,
             unet=unet,
         )
-        pipeline.save_pretrained(output_dir)
+        pipeline.save_pretrained(output_dir + f"/model-{model_n}")
+    
+    del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder
+    torch.cuda.empty_cache()
+    gc.collect()
 
     accelerator.end_training()
+    del accelerator
 
 
 def continual_training(
@@ -405,7 +423,7 @@ def continual_training(
     with open(prompt_file, 'r') as f:
         lines = f.readlines()
         
-        for line in tqdm(lines, desc=f'Tuning on video {i}'):
+        for line in tqdm(lines, desc=f'Tuning the model...'):
             if i == 1:
                 resume_from_checkpoint = None
             else:
@@ -419,6 +437,7 @@ def continual_training(
                 pretrained_model_path = pretrained_model_path,
                 output_dir = output_dir,
                 train_data = train_data,
+                model_n = i,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
                 validation_data = validation_data,
@@ -444,6 +463,10 @@ def continual_training(
                 enable_xformers_memory_efficient_attention = enable_xformers_memory_efficient_attention,
                 seed = seed,
             )
+            
+            del video_path, prompt_dataset
+            torch.cuda.empty_cache()
+            gc.collect()
             i += 1
 
 
