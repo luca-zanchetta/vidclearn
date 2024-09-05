@@ -26,12 +26,12 @@ from tuneavideo.data.dataset import TuneAVideoDataset
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
-from src.ewc import EWC
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
 logger = get_logger(__name__, log_level="INFO")
+
 
 def main(
     pretrained_model_path: str,
@@ -41,7 +41,6 @@ def main(
     video_path: str,
     prompt_dataset: str,
     validation_data: Dict,
-    fisher_importance: float = 0.1,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -66,10 +65,9 @@ def main(
     mixed_precision: Optional[str] = "fp16",
     use_8bit_adam: bool = False,
     enable_xformers_memory_efficient_attention: bool = True,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
 ):
     *_, config = inspect.getargvalues(inspect.currentframe())
-    ewc = None
 
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
@@ -198,23 +196,6 @@ def main(
     unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         unet, optimizer, train_dataloader, lr_scheduler
     )
-    
-    if resume_from_checkpoint is not None and os.path.exists(f"{output_dir}/fisher_{model_n-1}.pt"):
-        fisher_info = torch.load(f"{output_dir}/fisher_{model_n-1}.pt")
-        means = torch.load(f"{output_dir}/means_{model_n-1}.pt")
-        ewc = EWC(
-            model=unet,
-            dataloader=train_dataloader,
-            criterion=F.mse_loss,
-            noise_scheduler=noise_scheduler,
-            vae=vae,
-            text_encoder=text_encoder,
-            accelerator=accelerator,
-            n_sample_frames=train_data.n_sample_frames,
-            device=accelerator.device
-        )
-        ewc._precision_matrices = fisher_info
-        ewc._means = means
 
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
@@ -321,11 +302,6 @@ def main(
                 # Predict the noise residual and compute loss
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                
-                # EWC regularization loss
-                if ewc is not None:
-                    ewc_penalty = ewc.penalty(unet)
-                    loss += fisher_importance * ewc_penalty
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -391,20 +367,6 @@ def main(
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        ewc = EWC(
-            model=unet,
-            dataloader=train_dataloader,
-            criterion=F.mse_loss,
-            noise_scheduler=noise_scheduler,
-            vae=vae,
-            text_encoder=text_encoder,
-            accelerator=accelerator,
-            n_sample_frames=train_data.n_sample_frames,
-            device=accelerator.device
-        )
-        torch.save(ewc._precision_matrices, f"{output_dir}/fisher_{model_n}.pt")
-        torch.save(ewc._means, f"{output_dir}/means_{model_n}.pt")
-        
         unet = accelerator.unwrap_model(unet)
         pipeline = TuneAVideoPipeline.from_pretrained(
             pretrained_model_path,
@@ -429,7 +391,6 @@ def continual_training(
     prompt_file: str,
     train_data: Dict,
     validation_data: Dict,
-    fisher_importance: float = 0.1,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -463,7 +424,7 @@ def continual_training(
         lines = f.readlines()
         
         for line in tqdm(lines, desc=f'Tuning the model...'):
-            if i == 1 and resume_from_checkpoint != "latest":
+            if i == 1:
                 resume_from_checkpoint = None
             else:
                 resume_from_checkpoint = "latest"
@@ -476,7 +437,6 @@ def continual_training(
                 pretrained_model_path = pretrained_model_path,
                 output_dir = output_dir,
                 train_data = train_data,
-                fisher_importance = fisher_importance,
                 model_n = i,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
@@ -512,7 +472,7 @@ def continual_training(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="./configs/continual_tuneavideo.yaml")
+    parser.add_argument("--config", type=str, default="./configs/tuneavideo.yaml")
     args = parser.parse_args()
     
     continual_training(**OmegaConf.load(args.config))
