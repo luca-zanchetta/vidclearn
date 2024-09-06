@@ -10,7 +10,7 @@ import diffusers
 import transformers
 import gc
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 from omegaconf import OmegaConf
 from accelerate import Accelerator
 from accelerate.logging import get_logger
@@ -41,6 +41,7 @@ def main(
     video_path: str,
     prompt_dataset: str,
     validation_data: Dict,
+    save_models: List,
     fisher_importance: float = 0.1,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
@@ -360,7 +361,7 @@ def main(
 
                         ddim_inv_latent = None
                         if validation_data.use_inv_latent:
-                            inv_latents_path = os.path.join(output_dir, f"inv_latents/ddim_latent-{global_step}.pt")
+                            inv_latents_path = f"./inv_latents/ddim_latent-{global_step}.pt"
                             ddim_inv_latent = ddim_inversion(
                                 validation_pipeline, ddim_inv_scheduler, video_latent=latents,
                                 num_inv_steps=validation_data.num_inv_steps, prompt="")[-1].to(weight_dtype)
@@ -402,8 +403,8 @@ def main(
             n_sample_frames=train_data.n_sample_frames,
             device=accelerator.device
         )
-        torch.save(ewc._precision_matrices, f"{output_dir}/fisher_{model_n}.pt")
-        torch.save(ewc._means, f"{output_dir}/means_{model_n}.pt")
+        torch.save(ewc._precision_matrices, f"{output_dir}/ewc/fisher_{model_n}.pt")
+        torch.save(ewc._means, f"{output_dir}/ewc/means_{model_n}.pt")
         
         unet = accelerator.unwrap_model(unet)
         pipeline = TuneAVideoPipeline.from_pretrained(
@@ -412,7 +413,8 @@ def main(
             vae=vae,
             unet=unet,
         )
-        pipeline.save_pretrained(output_dir + f"/model-{model_n}")
+        if model_n in save_models:
+            pipeline.save_pretrained(output_dir + f"/model-{model_n}")
     
     del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder
     torch.cuda.empty_cache()
@@ -429,6 +431,7 @@ def continual_training(
     prompt_file: str,
     train_data: Dict,
     validation_data: Dict,
+    save_models: List,
     fisher_importance: float = 0.1,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
@@ -477,6 +480,7 @@ def continual_training(
                 output_dir = output_dir,
                 train_data = train_data,
                 fisher_importance = fisher_importance,
+                save_models = save_models,
                 model_n = i,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
