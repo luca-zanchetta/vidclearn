@@ -361,7 +361,7 @@ def main(
 
                         ddim_inv_latent = None
                         if validation_data.use_inv_latent:
-                            inv_latents_path = f"./inv_latents/ddim_latent-{global_step}.pt"
+                            inv_latents_path = os.path.join(output_dir, f"inv_latents/ddim_latent-{global_step}.pt")
                             ddim_inv_latent = ddim_inversion(
                                 validation_pipeline, ddim_inv_scheduler, video_latent=latents,
                                 num_inv_steps=validation_data.num_inv_steps, prompt="")[-1].to(weight_dtype)
