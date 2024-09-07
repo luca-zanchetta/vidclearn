@@ -102,6 +102,7 @@ def main(
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(output_dir + f"/model-{model_n}", exist_ok=True)
         os.makedirs(f"{output_dir}/samples", exist_ok=True)
+        os.makedirs(f"{output_dir}/ewc", exist_ok=True)
         os.makedirs(f"{output_dir}/inv_latents", exist_ok=True)
         OmegaConf.save(config, os.path.join(output_dir, 'config.yaml'))
 
