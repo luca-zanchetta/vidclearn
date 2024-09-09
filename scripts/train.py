@@ -244,6 +244,11 @@ def main(
             dirs = sorted(dirs, key=lambda x: int(x.split("-")[1]))
             path = dirs[-1]
             
+            try:
+                os.remove(dirs[-2])
+            except Exception as err:
+                logger.info("[ERROR] There is no previous checkpoint!")
+            
         accelerator.print(f"Resuming from checkpoint {path}")
         accelerator.load_state(os.path.join(output_dir, path))
         global_step = int(path.split("-")[1])
