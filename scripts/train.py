@@ -9,6 +9,7 @@ import torch.utils.checkpoint
 import diffusers
 import transformers
 import gc
+import shutil
 
 from typing import Dict, Optional, Tuple, List
 from omegaconf import OmegaConf
@@ -248,7 +249,7 @@ def main(
             path = dirs[-1]
             
             try:
-                os.remove(dirs[-2])
+                shutil.rmtree(output_dir + "/" + dirs[-2])
             except Exception as err:
                 logger.info("[ERROR] There is no previous checkpoint!")
             
@@ -386,7 +387,7 @@ def main(
         if model_n in save_models:
             os.makedirs(output_dir + f"/model-{model_n}", exist_ok=True)
             pipeline.save_pretrained(output_dir + f"/model-{model_n}")
-        pipeline.save_pretrained(output_dir + "/final_model")
+        pipeline.save_pretrained(output_dir + "/last_model")
     
     del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder
     torch.cuda.empty_cache()
