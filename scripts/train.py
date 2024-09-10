@@ -100,7 +100,7 @@ def main(
         # now = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         # output_dir = os.path.join(output_dir, now)
         os.makedirs(output_dir, exist_ok=True)
-        os.makedirs(output_dir + f"/model-{model_n}", exist_ok=True)
+        os.makedirs(f"{output_dir}/last_model", exist_ok=True)
         os.makedirs(f"{output_dir}/samples", exist_ok=True)
         os.makedirs(f"{output_dir}/ewc", exist_ok=True)
         os.makedirs(f"{output_dir}/inv_latents", exist_ok=True)
@@ -111,7 +111,11 @@ def main(
     tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_path, subfolder="tokenizer")
     text_encoder = CLIPTextModel.from_pretrained(pretrained_model_path, subfolder="text_encoder")
     vae = AutoencoderKL.from_pretrained(pretrained_model_path, subfolder="vae")
-    unet = UNet3DConditionModel.from_pretrained_2d(pretrained_model_path, subfolder="unet")
+    try:
+        unet = UNet3DConditionModel.from_pretrained_2d(f"{output_dir}/last_model", subfolder="unet")
+    except Exception as err:
+        unet = UNet3DConditionModel.from_pretrained_2d(pretrained_model_path, subfolder="unet")
+
 
     # Freeze vae and text_encoder
     vae.requires_grad_(False)
@@ -420,7 +424,9 @@ def main(
             unet=unet,
         )
         if model_n in save_models:
+            os.makedirs(output_dir + f"/model-{model_n}", exist_ok=True)
             pipeline.save_pretrained(output_dir + f"/model-{model_n}")
+        pipeline.save_pretrained(output_dir + "/final_model")
     
     del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder
     torch.cuda.empty_cache()
