@@ -10,6 +10,7 @@ import diffusers
 import transformers
 import gc
 import shutil
+import copy
 
 from typing import Dict, Optional, Tuple, List
 from omegaconf import OmegaConf
@@ -28,6 +29,7 @@ from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
 from src.ewc import EWC
+from src.distillation_loss import distillation_loss
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -43,7 +45,8 @@ def main(
     prompt_dataset: str,
     validation_data: Dict,
     save_models: List,
-    fisher_importance: float = 0.1,
+    fisher_importance: float = 0.5,
+    temperature: float = 1.0,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -116,7 +119,10 @@ def main(
         unet = UNet3DConditionModel.from_pretrained_2d(f"{output_dir}/last_model", subfolder="unet")
     except Exception as err:
         unet = UNet3DConditionModel.from_pretrained_2d(pretrained_model_path, subfolder="unet")
-
+        
+    # Load teacher model
+    teacher_unet = copy.deepcopy(unet)
+    teacher_unet.requires_grad_(False)
 
     # Freeze vae and text_encoder
     vae.requires_grad_(False)
@@ -136,6 +142,7 @@ def main(
 
     if gradient_checkpointing:
         unet.enable_gradient_checkpointing()
+        teacher_unet.enable_gradient_checkpointing()
 
     if scale_lr:
         learning_rate = (
@@ -234,6 +241,7 @@ def main(
     # Move text_encode and vae to gpu and cast to weight_dtype
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     vae.to(accelerator.device, dtype=weight_dtype)
+    teacher_unet.to(accelerator.device, dtype=weight_dtype)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
@@ -311,6 +319,7 @@ def main(
                 # Sample noise that we'll add to the latents
                 noise = torch.randn_like(latents)
                 bsz = latents.shape[0]
+                
                 # Sample a random timestep for each video
                 timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (bsz,), device=latents.device)
                 timesteps = timesteps.long()
@@ -332,12 +341,22 @@ def main(
 
                 # Predict the noise residual and compute loss
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                 
-                # EWC regularization loss
-                if ewc is not None:
-                    ewc_penalty = ewc.penalty(unet)
-                    loss += fisher_importance * ewc_penalty
+                # Compute distillation loss
+                with torch.no_grad():
+                    teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
+                distill_loss = distillation_loss(
+                    student_output=model_pred,
+                    teacher_output=teacher_output,
+                    temperature=temperature
+                )
+                
+                # EWC penalty
+                ewc_penalty = ewc.penalty(unet) if ewc is not None else 0.0
+                
+                # Compute adjusted loss
+                loss = mse_loss + fisher_importance * ewc_penalty + distill_loss 
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -395,7 +414,7 @@ def main(
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
-            del latents, noisy_latents, target, model_pred, loss
+            del latents, noisy_latents, target, model_pred, loss, teacher_output
 
             if global_step >= max_train_steps:
                 break
@@ -429,7 +448,7 @@ def main(
             pipeline.save_pretrained(output_dir + f"/model-{model_n}")
         pipeline.save_pretrained(output_dir + "/last_model")
     
-    del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder
+    del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder, teacher_unet
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -445,7 +464,8 @@ def continual_training(
     train_data: Dict,
     validation_data: Dict,
     save_models: List,
-    fisher_importance: float = 0.1,
+    fisher_importance: float = 0.5,
+    temperature: float = 1.0,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -493,6 +513,7 @@ def continual_training(
                 output_dir = output_dir,
                 train_data = train_data,
                 fisher_importance = fisher_importance,
+                temperature = temperature,
                 save_models = save_models,
                 model_n = i,
                 video_path = video_path,
