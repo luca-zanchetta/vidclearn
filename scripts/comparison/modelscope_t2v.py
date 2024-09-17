@@ -18,7 +18,7 @@ guidance_scale = 12.5
 os.makedirs(generated_videos_folder, exist_ok=True)
 
 # Load model
-pipe = DiffusionPipeline.from_pretrained("damo-vilab/text-to-video-ms-1.7b", torch_dtype=torch.float16, variant="fp16")
+pipe = DiffusionPipeline.from_pretrained("ali-vilab/text-to-video-ms-1.7b", torch_dtype=torch.float16, variant="fp16")
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
 # Optimize for GPU memory
