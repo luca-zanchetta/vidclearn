@@ -3,6 +3,7 @@ output_dir: "./final_model"
 
 video_dir: "data/train_videos"
 prompt_file: "data/train_captions.txt"
+plot_loss_file: "plots/losses-1.txt"
 
 train_data:
   pretrained_model_path: "./checkpoints/stable-diffusion-v1-4"

@@ -41,6 +41,7 @@ def main(
     output_dir: str,
     train_data: Dict,
     model_n: int,
+    plot_loss_file: str,
     video_path: str,
     prompt_dataset: str,
     validation_data: Dict,
@@ -375,6 +376,12 @@ def main(
                 progress_bar.update(1)
                 global_step += 1
                 accelerator.log({"train_loss": train_loss}, step=global_step)
+                
+                # Save loss for plotting purposes
+                with open(plot_loss_file, 'a') as file:
+                    file.write(train_loss + "\n")
+                    file.close()
+                
                 train_loss = 0.0
 
                 if global_step % checkpointing_steps == 0:
@@ -461,6 +468,7 @@ def continual_training(
     output_dir: str,
     video_dir: str,
     prompt_file: str,
+    plot_loss_file: str,
     train_data: Dict,
     validation_data: Dict,
     save_models: List,
@@ -516,6 +524,7 @@ def continual_training(
                 temperature = temperature,
                 save_models = save_models,
                 model_n = i,
+                plot_loss_file = plot_loss_file,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
                 validation_data = validation_data,
