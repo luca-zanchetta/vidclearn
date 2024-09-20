@@ -1,4 +1,4 @@
-# continual-text-to-video
+# VidCLearn: Continual Learning for Text-to-Video Generation
 
 The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video)
 
