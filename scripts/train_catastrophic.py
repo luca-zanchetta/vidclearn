@@ -334,7 +334,7 @@ def main(
                 
                 # Save loss for plotting purposes
                 with open(plot_loss_file, 'a') as file:
-                    file.write(train_loss + "\n")
+                    file.write(str(train_loss) + "\n")
                     file.close()
                 
                 train_loss = 0.0
