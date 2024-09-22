@@ -77,9 +77,9 @@ avg_ofc = sum(scores) / len(scores)
 
 # Metrics recap
 print("\n******************* METRICS RESULTS ************************\n")
-print(f'[RES] CLIP Score: {round(clip_score.item(), 5)}')
+print(f'[RES] CLIP Score: {round(clip_score.item() * 100, 5)}')
 print(f'[RES] Average SSIM: {round(avg_ssim, 5)}')
-print(f'[RES] Average PSNR: {round(avg_psnr, 5)} dB')
+print(f'[RES] Average PSNR: {round(avg_psnr.item(), 5)} dB')
 print(f'[RES] Average Flow Warping Error: {round(avg_fwe, 5)}')
 print(f'[RES] Average Optical Flow Consistency: {round(avg_ofc, 5)}')
 print("**************************************************************")
