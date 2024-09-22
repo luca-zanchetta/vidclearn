@@ -40,7 +40,7 @@ clip_score = compute_clip_score(generated_videos, prompts_file, frame_size)
 # Compute Average SSIM Score:
 print("\n[INFO] Computing Average SSIM Score [2/5]...")
 scores = []
-for generated_video, real_video in tqdm(zip(os.listdir(generated_videos_folder), os.listdir(train_videos_folder))):
+for generated_video, real_video in tqdm(zip(generated_videos, real_videos)):
     ssim_score = compute_ssim(generated_video, real_video, frame_size)
     scores.append(ssim_score)
 avg_ssim = sum(scores)/len(scores)
@@ -49,7 +49,7 @@ avg_ssim = sum(scores)/len(scores)
 # Compute PSNR:
 print("\n[INFO] Computing Average PSNR [3/5]...")
 scores = []
-for generated_video, real_video in tqdm(zip(os.listdir(generated_videos_folder), os.listdir(train_videos_folder))):
+for generated_video, real_video in tqdm(zip(generated_videos, real_videos)):
     psnr = compute_psnr(generated_video, real_video)
     scores.append(psnr)
 avg_psnr = sum(scores) / len(scores)
@@ -58,7 +58,7 @@ avg_psnr = sum(scores) / len(scores)
 # Compute Flow Warping Error
 print("\n[INFO] Computing Average Flow Warping Error [4/5]...")
 scores = []
-for generated_video, real_video in tqdm(zip(os.listdir(generated_videos_folder), os.listdir(train_videos_folder))):
+for generated_video, real_video in tqdm(zip(generated_videos, real_videos)):
     fwe = compute_fwe(generated_video, real_video, frame_size)
     scores.append(fwe)
 avg_fwe = sum(scores) / len(scores)
@@ -67,7 +67,7 @@ avg_fwe = sum(scores) / len(scores)
 # Compute Optical Flow Consistency
 print("\n[INFO] Computing Average Optical Flow Consistency [5/5]...")
 scores = []
-for generated_video, real_video in tqdm(zip(os.listdir(generated_videos_folder), os.listdir(train_videos_folder))):
+for generated_video, real_video in tqdm(zip(generated_videos, real_videos)):
     generated_flows = compute_video_optical_flow(generated_video)
     reference_flows = compute_video_optical_flow(real_video)
     consistency_metric = compute_optical_flow_consistency(generated_flows, reference_flows)
