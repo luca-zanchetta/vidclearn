@@ -180,13 +180,10 @@ def main(
     train_dataset.prompt_ids = tokenizer(
         train_dataset.prompt, max_length=tokenizer.model_max_length, padding="max_length", truncation=True, return_tensors="pt"
     ).input_ids[0]
-    
-    # Combine current dataset with memory replay
-    combined_dataset = get_replay_batch(train_dataset, replay_buffer)
 
-    # DataLoaders creation:
+    # DataLoaders creation
     train_dataloader = torch.utils.data.DataLoader(
-        combined_dataset, batch_size=train_batch_size, pin_memory=True, prefetch_factor=2
+        train_dataset, batch_size=train_batch_size, pin_memory=True, prefetch_factor=2
     )
 
     # Get the validation pipeline
@@ -391,6 +388,130 @@ def main(
         
     # Store the (text, video) pair in the replay buffer
     update_memory_buffer(replay_buffer, train_dataset, replay_buffer_capacity)
+    
+    # Combine current dataset with memory replay
+    combined_dataset = get_replay_batch(train_dataset, replay_buffer)
+    replay_dataloader = torch.utils.data.DataLoader(
+        combined_dataset, batch_size=train_batch_size, pin_memory=True, prefetch_factor=2
+    )
+    
+    # Re-training on replay buffer if there are at least two videos
+    if len(replay_buffer) > 1:
+        for epoch in range(first_epoch, num_train_epochs):
+            unet.train()
+            train_loss = 0.0
+            for step, batch in enumerate(replay_dataloader):
+                # Skip steps until we reach the resumed step
+                if resume_from_checkpoint and epoch == first_epoch and step < resume_step:
+                    if step % gradient_accumulation_steps == 0:
+                        progress_bar.update(1)
+                    continue
+
+                with accelerator.accumulate(unet):
+                    # Convert videos to latent space
+                    pixel_values = batch["pixel_values"].to(device=accelerator.device, dtype=weight_dtype)
+                    video_length = pixel_values.shape[1]
+                    pixel_values = rearrange(pixel_values, "b f c h w -> (b f) c h w")
+                    latents = vae.encode(pixel_values).latent_dist.sample()
+                    latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
+                    latents = latents * 0.18215
+                    
+                    if latents.shape[2] < train_data.n_sample_frames:
+                        padding_value = train_data.n_sample_frames - latents.shape[2]
+                        latents = F.pad(latents, (0, 0, 0, 0, padding_value, 0), "constant", 0)
+
+                    # Sample noise that we'll add to the latents
+                    noise = torch.randn_like(latents)
+                    bsz = latents.shape[0]
+                    # Sample a random timestep for each video
+                    timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (bsz,), device=latents.device)
+                    timesteps = timesteps.long()
+
+                    # Add noise to the latents according to the noise magnitude at each timestep
+                    # (this is the forward diffusion process)
+                    noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+
+                    # Get the text embedding for conditioning
+                    encoder_hidden_states = text_encoder(batch["prompt_ids"].to(device=accelerator.device))[0]
+
+                    # Get the target for loss depending on the prediction type
+                    if noise_scheduler.prediction_type == "epsilon":
+                        target = noise
+                    elif noise_scheduler.prediction_type == "v_prediction":
+                        target = noise_scheduler.get_velocity(latents, noise, timesteps)
+                    else:
+                        raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
+
+                    # Predict the noise residual and compute loss
+                    model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                    # Gather the losses across all processes for logging (if we use distributed training).
+                    avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
+                    train_loss += avg_loss.item() / gradient_accumulation_steps
+
+                    # Backpropagate
+                    accelerator.backward(loss)
+                    if accelerator.sync_gradients:
+                        accelerator.clip_grad_norm_(unet.parameters(), max_grad_norm)
+                    optimizer.step()
+                    lr_scheduler.step()
+                    optimizer.zero_grad()
+
+                # Checks if the accelerator has performed an optimization step behind the scenes
+                if accelerator.sync_gradients:
+                    progress_bar.update(1)
+                    global_step += 1
+                    accelerator.log({"train_loss": train_loss}, step=global_step)
+                    
+                    # Save loss for plotting purposes
+                    with open(plot_loss_file, 'a') as file:
+                        file.write(str(train_loss) + "\n")
+                        file.close()
+                    
+                    train_loss = 0.0
+
+                    if global_step % checkpointing_steps == 0:
+                        if accelerator.is_main_process:
+                            save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
+                            accelerator.save_state(save_path)
+                            logger.info(f"Saved state to {save_path}")
+
+                    if global_step % validation_steps == 0:
+                        if accelerator.is_main_process:
+                            samples = []
+                            generator = torch.Generator(device=latents.device)
+                            generator.manual_seed(seed)
+
+                            ddim_inv_latent = None
+                            if validation_data.use_inv_latent:
+                                inv_latents_path = os.path.join(output_dir, f"inv_latents/ddim_latent-{global_step}.pt")
+                                ddim_inv_latent = ddim_inversion(
+                                    validation_pipeline, ddim_inv_scheduler, video_latent=latents,
+                                    num_inv_steps=validation_data.num_inv_steps, prompt="")[-1].to(weight_dtype)
+                                torch.save(ddim_inv_latent, inv_latents_path)
+
+                            for idx, prompt in enumerate(validation_data.prompts):
+                                sample = validation_pipeline(prompt, generator=generator, latents=ddim_inv_latent,
+                                                            **validation_data).videos
+                                save_videos_grid(sample, f"{output_dir}/samples/sample-{global_step}/{prompt}.gif")
+                                samples.append(sample)
+                            samples = torch.concat(samples)
+                            save_path = f"{output_dir}/samples/sample-{global_step}.gif"
+                            save_videos_grid(samples, save_path)
+                            logger.info(f"Saved samples to {save_path}")
+                        
+                            # Garbage collection
+                            del samples, ddim_inv_latent, generator, batch, encoder_hidden_states
+                            torch.cuda.empty_cache()
+                            gc.collect()
+
+                logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
+                progress_bar.set_postfix(**logs)
+                del latents, noisy_latents, target, model_pred, loss
+
+                if global_step >= max_train_steps:
+                    break
 
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
@@ -407,7 +528,7 @@ def main(
             pipeline.save_pretrained(output_dir + f"/model-{model_n}")
         pipeline.save_pretrained(output_dir + "/last_model")
     
-    del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder
+    del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder, replay_dataloader
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -433,6 +554,7 @@ def continual_training(
     ),
     train_batch_size: int = 1,
     train_steps_per_video: int = 500,
+    train_steps_replay_buffer: int = 500,
     learning_rate: float = 3e-5,
     scale_lr: bool = False,
     lr_scheduler: str = "constant",
@@ -463,7 +585,11 @@ def continual_training(
                 resume_from_checkpoint = None
             else:
                 resume_from_checkpoint = "latest"
-                max_train_steps += train_steps_per_video
+                if len(replay_buffer) == 0 or len(replay_buffer) == 1:
+                    max_train_steps += train_steps_per_video
+                else:
+                    update_steps = train_steps_per_video + train_steps_replay_buffer
+                    max_train_steps += update_steps
             
             video_name, prompt_dataset = line.strip().split(':')
             video_path = os.path.join(video_dir, video_name)
