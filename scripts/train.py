@@ -258,6 +258,11 @@ def main(
                 shutil.rmtree(output_dir + "/" + dirs[-2])
             except Exception as err:
                 logger.info("[ERROR] There is no previous checkpoint!")
+                
+            try:
+                shutil.rmtree(output_dir + "/" + dirs[-3])
+            except Exception as err:
+                logger.info("[ERROR] There is no prior checkpoint!")
             
         accelerator.print(f"Resuming from checkpoint {path}")
         accelerator.load_state(os.path.join(output_dir, path))
