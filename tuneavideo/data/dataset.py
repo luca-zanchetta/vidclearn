@@ -42,3 +42,16 @@ class TuneAVideoDataset(Dataset):
         }
 
         return example
+
+class CombinedTuneAVideoDataset(Dataset):
+    def __init__(self, datasets: list):
+        self.datasets = datasets
+    
+    def __len__(self):
+        return len(self.datasets)
+    
+    def __getitem__(self, index):
+        return self.datasets[index][0]
+    
+    def add_item(self, new_data):
+        self.datasets.append(new_data)

@@ -412,8 +412,6 @@ def continual_training(
     plot_loss_file: str,
     train_data: Dict,
     save_models: List,
-    fisher_importance: float,
-    temperature: float,
     validation_data: Dict,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
@@ -440,6 +438,7 @@ def continual_training(
     use_8bit_adam: bool = False,
     enable_xformers_memory_efficient_attention: bool = True,
     seed: Optional[int] = None,
+    replay_buffer_capacity: int = 100,
 ):
     i = 1
     max_train_steps = train_steps_per_video
