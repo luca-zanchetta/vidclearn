@@ -5,16 +5,17 @@ from tuneavideo.util import save_videos_grid
 from tqdm import tqdm
 
 # Hyperparameters
-pretrained_model_path = "./checkpoints/stable-diffusion-v1-4"
-model_path = "./final_model/model-1"
-prompt_file = "./data/test_captions.txt"
-curr_video = 0
+model_n = 1
 test_n = 1
-inv_latent_path = f"final_model/inv_latents/ddim_latent-500.pt"
+pretrained_model_path = "./checkpoints/stable-diffusion-v1-4"
+model_path = f"./final_model/model-{model_n}"
+prompt_file = "./data/ChatGPT_test_captions.txt"
+curr_video = 0
+inv_latent_path = f"final_model/inv_latents/ddim_latent-{model_n}.pt"
 frames_per_video = 24
 height = 512
 width = 512
-inference_steps = 50
+inference_steps = 150
 guidance_scale = 12.5
 
 # Setup model
