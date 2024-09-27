@@ -421,7 +421,6 @@ def continual_training(
     ),
     train_batch_size: int = 1,
     train_steps_per_video: int = 500,
-    train_steps_replay_buffer: int = 500,
     learning_rate: float = 3e-5,
     scale_lr: bool = False,
     lr_scheduler: str = "constant",

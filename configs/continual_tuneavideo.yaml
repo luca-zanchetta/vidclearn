@@ -31,7 +31,6 @@ save_models: [1, 5, 10, 25, 50, 75, 90]
 replay_buffer_capacity: 90
 learning_rate: 3e-5
 train_steps_per_video: 500
-train_steps_replay_buffer: 500
 checkpointing_steps: 500
 validation_steps: 500
 trainable_modules:
