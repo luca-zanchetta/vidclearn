@@ -14,7 +14,7 @@ inv_latent_path = f"final_model/inv_latents/ddim_latent-500.pt"
 frames_per_video = 24
 height = 512
 width = 512
-inference_steps = 50
+inference_steps = 150
 guidance_scale = 12.5
 
 # Setup model
