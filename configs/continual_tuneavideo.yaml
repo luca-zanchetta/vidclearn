@@ -7,7 +7,7 @@ plot_loss_file: "plots/losses-1.txt"
 
 train_data:
   pretrained_model_path: "./checkpoints/stable-diffusion-v1-4"
-  n_sample_frames: 24
+  n_sample_frames: 22
   width: 512
   height: 512
   sample_start_idx: 0
@@ -19,7 +19,7 @@ validation_data:
     - "a man playing violin with two men in a room"
     - "a group of people dancing in front of a building"
     - "a roller coaster with a blue sky and orange and purple colors"
-  video_length: 24
+  video_length: 22
   width: 512
   height: 512
   num_inference_steps: 150
@@ -28,7 +28,8 @@ validation_data:
   num_inv_steps: 100
 
 save_models: [1, 5, 10, 25, 50, 75, 90]
-replay_buffer_capacity: 90
+fisher_importance: 0.5
+temperature: 1.0
 learning_rate: 3e-5
 train_steps_per_video: 500
 checkpointing_steps: 500

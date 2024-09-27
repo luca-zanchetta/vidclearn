@@ -10,6 +10,7 @@ import diffusers
 import transformers
 import gc
 import shutil
+import copy
 
 from typing import Dict, Optional, Tuple, List
 from omegaconf import OmegaConf
@@ -23,18 +24,17 @@ from diffusers.utils.import_utils import is_xformers_available
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 from tuneavideo.models.unet import UNet3DConditionModel
-from tuneavideo.data.dataset import TuneAVideoDataset, CombinedTuneAVideoDataset
+from tuneavideo.data.dataset import TuneAVideoDataset
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
-
-from src.replay_buffer import get_replay_batch, update_memory_buffer
+from src.ewc import EWC
+from src.distillation_loss import distillation_loss
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
 logger = get_logger(__name__, log_level="INFO")
-
 
 def main(
     pretrained_model_path: str,
@@ -44,8 +44,10 @@ def main(
     plot_loss_file: str,
     video_path: str,
     prompt_dataset: str,
-    save_models: List,
     validation_data: Dict,
+    save_models: List,
+    fisher_importance: float = 0.5,
+    temperature: float = 1.0,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -70,11 +72,10 @@ def main(
     mixed_precision: Optional[str] = "fp16",
     use_8bit_adam: bool = False,
     enable_xformers_memory_efficient_attention: bool = True,
-    seed: Optional[int] = None,
-    replay_buffer: List = [],
-    replay_buffer_capacity: int = 100,
+    seed: Optional[int] = None
 ):
     *_, config = inspect.getargvalues(inspect.currentframe())
+    ewc = None
 
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
@@ -106,8 +107,8 @@ def main(
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(f"{output_dir}/last_model", exist_ok=True)
         os.makedirs(f"{output_dir}/samples", exist_ok=True)
+        os.makedirs(f"{output_dir}/ewc", exist_ok=True)
         os.makedirs(f"{output_dir}/inv_latents", exist_ok=True)
-        config.pop('replay_buffer', None)
         OmegaConf.save(config, os.path.join(output_dir, 'config.yaml'))
 
     # Load scheduler, tokenizer and models.
@@ -119,6 +120,10 @@ def main(
         unet = UNet3DConditionModel.from_pretrained_2d(f"{output_dir}/last_model", subfolder="unet")
     except Exception as err:
         unet = UNet3DConditionModel.from_pretrained_2d(pretrained_model_path, subfolder="unet")
+        
+    # Load teacher model
+    teacher_unet = copy.deepcopy(unet)
+    teacher_unet.requires_grad_(False)
 
     # Freeze vae and text_encoder
     vae.requires_grad_(False)
@@ -138,6 +143,7 @@ def main(
 
     if gradient_checkpointing:
         unet.enable_gradient_checkpointing()
+        teacher_unet.enable_gradient_checkpointing()
 
     if scale_lr:
         learning_rate = (
@@ -180,13 +186,10 @@ def main(
     train_dataset.prompt_ids = tokenizer(
         train_dataset.prompt, max_length=tokenizer.model_max_length, padding="max_length", truncation=True, return_tensors="pt"
     ).input_ids[0]
-    
-    # Combine current dataset with memory replay
-    combined_dataset = get_replay_batch(train_dataset, replay_buffer)
 
     # DataLoaders creation:
     train_dataloader = torch.utils.data.DataLoader(
-        combined_dataset, batch_size=train_batch_size, pin_memory=True, prefetch_factor=2
+        train_dataset, batch_size=train_batch_size, pin_memory=True, prefetch_factor=2
     )
 
     # Get the validation pipeline
@@ -210,6 +213,23 @@ def main(
     unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         unet, optimizer, train_dataloader, lr_scheduler
     )
+    
+    if resume_from_checkpoint is not None and os.path.exists(f"{output_dir}/fisher_{model_n-1}.pt"):
+        fisher_info = torch.load(f"{output_dir}/fisher_{model_n-1}.pt")
+        means = torch.load(f"{output_dir}/means_{model_n-1}.pt")
+        ewc = EWC(
+            model=unet,
+            dataloader=train_dataloader,
+            criterion=F.mse_loss,
+            noise_scheduler=noise_scheduler,
+            vae=vae,
+            text_encoder=text_encoder,
+            accelerator=accelerator,
+            n_sample_frames=train_data.n_sample_frames,
+            device=accelerator.device
+        )
+        ewc._precision_matrices = fisher_info
+        ewc._means = means
 
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
@@ -222,6 +242,7 @@ def main(
     # Move text_encode and vae to gpu and cast to weight_dtype
     text_encoder.to(accelerator.device, dtype=weight_dtype)
     vae.to(accelerator.device, dtype=weight_dtype)
+    teacher_unet.to(accelerator.device, dtype=weight_dtype)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
@@ -299,6 +320,7 @@ def main(
                 # Sample noise that we'll add to the latents
                 noise = torch.randn_like(latents)
                 bsz = latents.shape[0]
+                
                 # Sample a random timestep for each video
                 timesteps = torch.randint(0, noise_scheduler.num_train_timesteps, (bsz,), device=latents.device)
                 timesteps = timesteps.long()
@@ -320,7 +342,22 @@ def main(
 
                 # Predict the noise residual and compute loss
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                
+                # Compute distillation loss
+                with torch.no_grad():
+                    teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
+                distill_loss = distillation_loss(
+                    student_output=model_pred,
+                    teacher_output=teacher_output,
+                    temperature=temperature
+                )
+                
+                # EWC penalty
+                ewc_penalty = ewc.penalty(unet) if ewc is not None else 0.0
+                
+                # Compute adjusted loss
+                loss = mse_loss + fisher_importance * ewc_penalty + distill_loss 
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -384,17 +421,28 @@ def main(
 
             logs = {"step_loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
             progress_bar.set_postfix(**logs)
-            del latents, noisy_latents, target, model_pred, loss
+            del latents, noisy_latents, target, model_pred, loss, teacher_output
 
             if global_step >= max_train_steps:
                 break
-        
-    # Store the (text, video) pair in the replay buffer
-    update_memory_buffer(replay_buffer, train_dataset, replay_buffer_capacity)
 
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
+        ewc = EWC(
+            model=unet,
+            dataloader=train_dataloader,
+            criterion=F.mse_loss,
+            noise_scheduler=noise_scheduler,
+            vae=vae,
+            text_encoder=text_encoder,
+            accelerator=accelerator,
+            n_sample_frames=train_data.n_sample_frames,
+            device=accelerator.device
+        )
+        torch.save(ewc._precision_matrices, f"{output_dir}/ewc/fisher_{model_n}.pt")
+        torch.save(ewc._means, f"{output_dir}/ewc/means_{model_n}.pt")
+        
         unet = accelerator.unwrap_model(unet)
         pipeline = TuneAVideoPipeline.from_pretrained(
             pretrained_model_path,
@@ -407,7 +455,7 @@ def main(
             pipeline.save_pretrained(output_dir + f"/model-{model_n}")
         pipeline.save_pretrained(output_dir + "/last_model")
     
-    del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder
+    del train_dataloader, optimizer, unet, lr_scheduler, vae, text_encoder, teacher_unet
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -422,9 +470,10 @@ def continual_training(
     prompt_file: str,
     plot_loss_file: str,
     train_data: Dict,
-    save_models: List,
     validation_data: Dict,
-    replay_buffer_capacity: int = 100,
+    save_models: List,
+    fisher_importance: float = 0.5,
+    temperature: float = 1.0,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -453,7 +502,6 @@ def continual_training(
 ):
     i = 1
     max_train_steps = train_steps_per_video
-    replay_buffer = []
     
     with open(prompt_file, 'r') as f:
         lines = f.readlines()
@@ -472,13 +520,13 @@ def continual_training(
                 pretrained_model_path = pretrained_model_path,
                 output_dir = output_dir,
                 train_data = train_data,
+                fisher_importance = fisher_importance,
+                temperature = temperature,
+                save_models = save_models,
                 model_n = i,
-                replay_buffer = replay_buffer,
-                replay_buffer_capacity = replay_buffer_capacity,
                 plot_loss_file = plot_loss_file,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
-                save_models = save_models,
                 validation_data = validation_data,
                 validation_steps = validation_steps,
                 trainable_modules = trainable_modules,
