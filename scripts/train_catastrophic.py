@@ -412,6 +412,7 @@ def continual_training(
     plot_loss_file: str,
     train_data: Dict,
     save_models: List,
+    lambda_temporal: float,
     fisher_importance: float,
     temperature: float,
     validation_data: Dict,

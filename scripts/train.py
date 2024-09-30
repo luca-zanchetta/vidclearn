@@ -48,6 +48,7 @@ def main(
     save_models: List,
     fisher_importance: float = 0.5,
     temperature: float = 1.0,
+    lambda_temporal: float = 0.01,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -356,8 +357,18 @@ def main(
                 # EWC penalty
                 ewc_penalty = ewc.penalty(unet) if ewc is not None else 0.0
                 
+                # Temporal Consistency loss
+                temporal_loss = 0.0
+                if latents.shape[2] > 1:    # Ensure there are multiple frames to compare
+                    # Shift the latents by 1 along the frame dimension
+                    latents_next_frame = latents[:, :, 1:, :, :]        # Frame 2 onwards
+                    latents_current_frame = latents[:, :, :-1, :, :]    # Frame 1 to second last
+                    
+                    # Compute temporal consistency loss
+                    temporal_loss = F.l1_loss(latents_current_frame, latents_next_frame)
+                
                 # Compute adjusted loss
-                loss = mse_loss + fisher_importance * ewc_penalty + distill_loss 
+                loss = mse_loss + fisher_importance * ewc_penalty + distill_loss + lambda_temporal * temporal_loss
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -474,6 +485,7 @@ def continual_training(
     save_models: List,
     fisher_importance: float = 0.5,
     temperature: float = 1.0,
+    lambda_temporal: float = 0.01,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -522,6 +534,7 @@ def continual_training(
                 train_data = train_data,
                 fisher_importance = fisher_importance,
                 temperature = temperature,
+                lambda_temporal = lambda_temporal,
                 save_models = save_models,
                 model_n = i,
                 plot_loss_file = plot_loss_file,
