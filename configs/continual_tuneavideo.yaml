@@ -3,11 +3,15 @@ output_dir: "./final_model"
 
 video_dir: "data/train_videos"
 prompt_file: "data/train_captions.txt"
+prompt_file_test: "data/test_captions.txt"
 plot_loss_file: "plots/losses-1.txt"
+clip_file_test: "data/clip_file_test.txt"
+clip_file_train_middle: "data/clip_file_train_middle.txt"
+clip_file_train_end: "data/clip_file_train_end.txt"
 
 train_data:
   pretrained_model_path: "./checkpoints/stable-diffusion-v1-4"
-  n_sample_frames: 22
+  n_sample_frames: 20
   width: 512
   height: 512
   sample_start_idx: 0
@@ -19,7 +23,7 @@ validation_data:
     - "a man playing violin with two men in a room"
     - "a group of people dancing in front of a building"
     - "a roller coaster with a blue sky and orange and purple colors"
-  video_length: 22
+  video_length: 20
   width: 512
   height: 512
   num_inference_steps: 150
@@ -30,7 +34,7 @@ validation_data:
 save_models: [1, 5, 10, 25, 50, 75, 90]
 fisher_importance: 0.5
 temperature: 1.0
-lambda_temporal: 0.01
+lambda_temporal: 0.0
 learning_rate: 3e-5
 train_steps_per_video: 500
 checkpointing_steps: 500

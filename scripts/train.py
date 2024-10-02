@@ -30,6 +30,7 @@ from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
 from src.ewc import EWC
 from src.distillation_loss import distillation_loss
+from src.train_eval import init_eval_test, middle_eval_test
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -44,6 +45,10 @@ def main(
     plot_loss_file: str,
     video_path: str,
     prompt_dataset: str,
+    prompt_file_test: str,
+    clip_file_test: str,
+    clip_file_train_middle: str,
+    clip_file_train_end: str,
     validation_data: Dict,
     save_models: List,
     fisher_importance: float = 0.5,
@@ -121,6 +126,12 @@ def main(
         unet = UNet3DConditionModel.from_pretrained_2d(f"{output_dir}/last_model", subfolder="unet")
     except Exception as err:
         unet = UNet3DConditionModel.from_pretrained_2d(pretrained_model_path, subfolder="unet")
+        
+        # Compute and save initial CLIP Score
+        init_clip_score = init_eval_test(pretrained_model_path, prompt_file_test, validation_data, accelerator)
+        with open(clip_file_test, "w") as file:
+            file.write(f"0:{init_clip_score}\n")
+            file.close()
         
     # Load teacher model
     teacher_unet = copy.deepcopy(unet)
@@ -414,6 +425,12 @@ def main(
                                 validation_pipeline, ddim_inv_scheduler, video_latent=latents,
                                 num_inv_steps=validation_data.num_inv_steps, prompt="")[-1].to(weight_dtype)
                             torch.save(ddim_inv_latent, inv_latents_path)
+                            
+                            # Compute and save CLIP Score
+                            clip_score = middle_eval_test(pretrained_model_path, unet, prompt_file_test, validation_data, inv_latents_path, accelerator)
+                            with open(clip_file_test, "a") as file:
+                                file.write(f"{model_n}:{clip_score}\n")
+                                file.close()
 
                         for idx, prompt in enumerate(validation_data.prompts):
                             sample = validation_pipeline(prompt, generator=generator, latents=ddim_inv_latent,
@@ -479,7 +496,11 @@ def continual_training(
     output_dir: str,
     video_dir: str,
     prompt_file: str,
+    prompt_file_test: str,
     plot_loss_file: str,
+    clip_file_test: str,
+    clip_file_train_middle: str,
+    clip_file_train_end: str,
     train_data: Dict,
     validation_data: Dict,
     save_models: List,
@@ -540,6 +561,10 @@ def continual_training(
                 plot_loss_file = plot_loss_file,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
+                prompt_file_test = prompt_file_test,
+                clip_file_test = clip_file_test,
+                clip_file_train_middle = clip_file_train_middle,
+                clip_file_train_end = clip_file_train_end,
                 validation_data = validation_data,
                 validation_steps = validation_steps,
                 trainable_modules = trainable_modules,

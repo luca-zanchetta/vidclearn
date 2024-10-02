@@ -1,6 +1,5 @@
 import torch
 import torchvision.transforms as transforms
-import yaml
 import numpy as np
 
 from PIL import Image
@@ -36,8 +35,12 @@ def extract_prompts(file_path):
         
         return prompts
 
-def compute_clip_score(generated_videos, prompts_file, frame_size):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def compute_clip_score(generated_videos, prompts_file, frame_size, accelerator = None):
+    device = None
+    if accelerator is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = accelerator.device
 
     # Initialize the CLIP model and processor
     clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)

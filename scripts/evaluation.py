@@ -14,7 +14,7 @@ generated_videos_folder = f'./inference_samples/inference_samples_{test_n}/'
 prompts_file = './data/test_captions.txt'
 num_videos_tot = len(os.listdir(real_videos_folder))
 frame_size = (512, 512)
-frames_per_video = 24
+frames_per_video = 20
 
 # Load videos
 print("\n[INFO] Loading real videos...")
@@ -33,17 +33,17 @@ for path in tqdm(videos, total=len(videos)):
     video_path = os.path.join(generated_videos_folder, path)
     generated_videos.append(load_video(video_path, frames_per_video, frame_size))
 
-# # Compute FVD
-# print("\n[INFO] Computing FVD [1/4]...")
-# fvd = compute_fvd(real_videos, generated_videos)
+# Compute FVD
+print("\n[INFO] Computing FVD [1/4]...")
+fvd = compute_fvd(real_videos, generated_videos)
 
-# # Compute FID
-# print("\n[INFO] Computing FID [2/4]...")
-# fid_score = compute_fid(real_videos, generated_videos)
+# Compute FID
+print("\n[INFO] Computing FID [2/4]...")
+fid_score = compute_fid(real_videos, generated_videos)
 
-# # Compute IS
-# print("\n[INFO] Computing Inception Score [3/4]...")
-# is_score, std_deviation = compute_is(generated_videos)
+# Compute IS
+print("\n[INFO] Computing Inception Score [3/4]...")
+is_score, std_deviation = compute_is(generated_videos)
 
 # Compute CLIP score
 print("\n[INFO] Computing CLIP Score [4/4]...")
@@ -51,8 +51,8 @@ clip_score = compute_clip_score(generated_videos, prompts_file, frame_size)
 
 # Metrics recap
 print("\n******************* METRICS RESULTS ************************\n")
-# print(f'[RES] FVD:', round(fvd, 5))
-# print(f'[RES] FID: {round(fid_score.item(), 5)}')
-# print(f'[RES] IS: {round(is_score, 5)}')
+print(f'[RES] FVD:', round(fvd, 5))
+print(f'[RES] FID: {round(fid_score.item(), 5)}')
+print(f'[RES] IS: {round(is_score, 5)}')
 print(f'[RES] CLIP Score: {round(clip_score.item()*100, 5)}')
 print("**************************************************************")
