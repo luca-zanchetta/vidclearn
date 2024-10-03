@@ -1,3 +1,5 @@
+from tqdm import tqdm
+
 def compute_fwt(tot_train_videos, clip_file):
     '''
     clip_file is a textual file of the form:
@@ -18,12 +20,13 @@ def compute_fwt(tot_train_videos, clip_file):
     with open(clip_file, "r") as file:
         lines = file.readlines()
         
-        for line in lines:
+        for line in tqdm(lines, desc='Computing FWT', total=len(lines)):
             video_n, avg_clip_current = line.strip().split(':')
-            if video_n == 0:
+            avg_clip_current = float(avg_clip_current)
+            if int(video_n) == 0:
                 avg_clip_init = avg_clip_current
             
-            if video_n >= 2:
+            if int(video_n) >= 2:
                 summation += (avg_clip_current - avg_clip_init)
         
         file.close()

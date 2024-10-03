@@ -1,7 +1,7 @@
 from src.utils import load_video
 from src.ssim import compute_ssim
 from src.psnr import compute_psnr
-from src.clip import compute_clip_score
+from src.clip import compute_clip_score_single
 from src.fwe import compute_fwe
 from src.of_consistency import compute_video_optical_flow, compute_optical_flow_consistency
 
@@ -38,7 +38,7 @@ psnr = compute_psnr(generated_video, real_video)
 
 # Compute CLIP score
 print("\n[INFO] Computing CLIP Score [3/5]...")
-clip_score = compute_clip_score(generated_video, prompt, frame_size)
+clip_score = compute_clip_score_single(generated_video, prompt, frame_size)
 
 
 # Compute Flow Warping Error

@@ -19,3 +19,4 @@ imageio[pyav]
 torchmetrics
 scipy
 torchmetrics[image]
+matplotlib

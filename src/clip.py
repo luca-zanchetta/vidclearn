@@ -22,8 +22,11 @@ def preprocess_frames(frames, frame_size):
     return [transform(Image.fromarray(frame)) for frame in frames]
 
 # Function to compute the CLIP Score between a single generated video and its corresponding prompt
-def compute_clip_score(generated_video, prompt, frame_size):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def compute_clip_score_single(generated_video, prompt, frame_size, accelerator=None):
+    if accelerator is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = accelerator.device
 
     # Initialize the CLIP model and processor
     clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)

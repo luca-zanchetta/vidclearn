@@ -27,7 +27,7 @@ from tuneavideo.data.dataset import TuneAVideoDataset
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
-from src.train_eval import init_eval_test, middle_eval_test
+from src.train_eval import init_eval_test, middle_eval_test, middle_eval_train, end_eval_train
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -43,6 +43,7 @@ def main(
     plot_loss_file: str,
     prompt_file_test: str,
     clip_file_test: str,
+    clip_file_train_middle: str,
     video_path: str,
     prompt_dataset: str,
     save_models: List,
@@ -368,10 +369,16 @@ def main(
                                 num_inv_steps=validation_data.num_inv_steps, prompt="")[-1].to(weight_dtype)
                             torch.save(ddim_inv_latent, inv_latents_path)
                             
-                            # Compute and save CLIP Score
+                            # Compute and save CLIP Score on test set
                             clip_score = middle_eval_test(pretrained_model_path, unet, prompt_file_test, validation_data, inv_latents_path, accelerator)
                             with open(clip_file_test, "a") as file:
                                 file.write(f"{model_n}:{clip_score}\n")
+                                file.close()
+                                
+                            # Compute and save CLIP Score on the currently seen training video
+                            clip_score_train = middle_eval_train(pretrained_model_path, unet, train_dataset.prompt, validation_data, inv_latents_path, accelerator)
+                            with open(clip_file_train_middle, "a") as file:
+                                file.write(f"{model_n}:{clip_score_train}\n")
                                 file.close()
 
                         for idx, prompt in enumerate(validation_data.prompts):
@@ -463,6 +470,7 @@ def continual_training(
 ):
     i = 1
     max_train_steps = train_steps_per_video
+    training_prompts = []
     
     with open(prompt_file, 'r') as f:
         lines = f.readlines()
@@ -476,6 +484,7 @@ def continual_training(
             
             video_name, prompt_dataset = line.strip().split(':')
             video_path = os.path.join(video_dir, video_name)
+            training_prompts.append(prompt_dataset)
             
             main(
                 pretrained_model_path = pretrained_model_path,
@@ -485,6 +494,7 @@ def continual_training(
                 plot_loss_file = plot_loss_file,
                 prompt_file_test = prompt_file_test,
                 clip_file_test = clip_file_test,
+                clip_file_train_middle = clip_file_train_middle,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
                 save_models = save_models,
@@ -516,6 +526,19 @@ def continual_training(
             torch.cuda.empty_cache()
             gc.collect()
             i += 1
+            
+        f.close()
+    
+    # Determine the last inverted latent
+    inv_latents_path = os.path.join(output_dir, "inv_latents/")
+    inv_latents = os.listdir(inv_latents_path)
+    inv_latents = [l for l in inv_latents if l.startswith("ddim_latent")]
+    inv_latents = sorted(inv_latents, key=lambda x: int(x.split("-")[1]))
+    last_inv_latents_path = os.path.join(inv_latents_path, inv_latents[-1])
+    
+    # Compute and save end CLIP Score on training set
+    last_model_path = os.path.join(output_dir, "final_model/")
+    end_eval_train(pretrained_model_path, last_model_path, training_prompts, validation_data, last_inv_latents_path, mixed_precision, clip_file_train_end)
 
 
 if __name__ == "__main__":

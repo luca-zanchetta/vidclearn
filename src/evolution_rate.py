@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 def plot_evolution_rate(evolution_rates_file):
     evolution_rates = []
@@ -9,7 +10,7 @@ def plot_evolution_rate(evolution_rates_file):
         
         for line in lines:
             video_n, evo_rate = line.strip().split(':')
-            evolution_rates.append(evo_rate)
+            evolution_rates.append(float(evo_rate))
         
         file.close()
     
@@ -39,8 +40,10 @@ def compute_evolution_rate(clip_file):
         
         with open(evolution_rates_file, "w") as evo_file:
             avg_clip_prec = 0.0
-            for line in lines:
+            for line in tqdm(lines, desc='Computing Evolution Rates', total=len(lines)):
                 video_n, avg_clip_current = line.strip().split(':')
+                avg_clip_current = float(avg_clip_current)
+                
                 if avg_clip_prec == 0.0:
                     avg_clip_prec = avg_clip_current
                     continue
@@ -49,5 +52,3 @@ def compute_evolution_rate(clip_file):
                 evo_file.write(f"{video_n}:{evo_rate}")
             evo_file.close()
         file.close()
-        
-    print("[INFO] Evolution rates computed.")
