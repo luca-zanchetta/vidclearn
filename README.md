@@ -1,21 +1,36 @@
 # VidCLearn: Continual Learning for Text-to-Video Generation
 
-*Abstract*
+[![arXiv](https://img.shields.io/badge/arXiv-1234.56789-b31b1b.svg)]()
+
+*Short description*
+
+## Abstract
+*Work in progress...*
+
+## Dataset
+*Work in progress...*
 
 ## Setup
-
-The first thing you can do is pulling our docker image, by launching the following command:
+- Download and Install the [Docker Engine](https://www.docker.com/products/docker-desktop/);
+- Open a terminal;
+- Pull our Docker image by launching the following command:
 ```
-$ docker pull lucazanchetta/vidclearn:latest
+$ docker pull <insert-image>
 ```
 
-## Training
+## How to run the code
+*Short description*
+
+### Training
 *Work in progress...*
 
-## Inference
+### Inference
 *Work in progress...*
 
-## Evaluation
+### Evaluation
+*Work in progress...*
+
+## Authors
 *Work in progress...*
 
 ## Acknowledgements
