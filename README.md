@@ -1,23 +1,13 @@
 # VidCLearn: Continual Learning for Text-to-Video Generation
 
-The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video)
+*Abstract*
 
 ## Setup
 
-The first thing you can do is cloning our repository, by launching the following command:
+The first thing you can do is pulling our docker image, by launching the following command:
 ```
-$ git clone https://github.com/luca-zanchetta/vidclearn/tree/main
+$ docker pull lucazanchetta/vidclearn:latest
 ```
-Then, launch the following command:
-```
-$ cd vidclearn
-```
-
-### Download Dataset
-*Work in progress...*
-
-### Download Pre-Trained Stable Diffusion
-*Work in progress...*
 
 ## Training
 *Work in progress...*
@@ -27,3 +17,6 @@ $ cd vidclearn
 
 ## Evaluation
 *Work in progress...*
+
+## Acknowledgements
+The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video). The data has been taken from the [DAVIS Dataset](https://davischallenge.org/davis2017/code.html) and has been manipulated accordingly.
