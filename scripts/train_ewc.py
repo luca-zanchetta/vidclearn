@@ -584,7 +584,7 @@ def continual_training(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="./configs/continual_tuneavideo.yaml")
+    parser.add_argument("--config", type=str, default="./configs/training.yaml")
     args = parser.parse_args()
     
     continual_training(**OmegaConf.load(args.config))

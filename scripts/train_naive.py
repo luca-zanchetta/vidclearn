@@ -537,13 +537,13 @@ def continual_training(
     last_inv_latents_path = os.path.join(inv_latents_path, inv_latents[-1])
     
     # Compute and save end CLIP Score on training set
-    last_model_path = os.path.join(output_dir, "final_model/")
+    last_model_path = os.path.join(output_dir, "last_model/")
     end_eval_train(pretrained_model_path, last_model_path, training_prompts, validation_data, last_inv_latents_path, mixed_precision, clip_file_train_end)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="./configs/continual_tuneavideo.yaml")
+    parser.add_argument("--config", type=str, default="./configs/training.yaml")
     args = parser.parse_args()
     
     continual_training(**OmegaConf.load(args.config))

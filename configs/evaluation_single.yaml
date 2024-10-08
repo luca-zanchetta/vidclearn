@@ -1,0 +1,6 @@
+real_video_path: './data/man-skiing.mp4'
+generated_video_path: './inference_samples/1.gif'
+prompt: 'spider man is skiing'
+width: 512
+height: 512
+frames_per_video: 24

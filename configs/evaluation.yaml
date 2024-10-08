@@ -1,0 +1,8 @@
+test_n: 1
+real_videos_folder: './data/test_videos'
+train_videos_folder: './data/train_videos'
+clip_file_test: 'data/clip_file_test.txt'
+clip_file_train_middle: 'data/clip_file_train_middle.txt'
+clip_file_train_end: 'data/clip_file_train_end.txt'
+prompts_file: './data/test_captions.txt'
+frames_per_video: 20
