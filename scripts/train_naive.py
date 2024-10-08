@@ -533,7 +533,7 @@ def continual_training(
     inv_latents_path = os.path.join(output_dir, "inv_latents/")
     inv_latents = os.listdir(inv_latents_path)
     inv_latents = [l for l in inv_latents if l.startswith("ddim_latent")]
-    inv_latents = sorted(inv_latents, key=lambda x: int(x.split("-")[1]))
+    inv_latents = sorted(inv_latents, key=lambda x: int(x.split("-")[1][:-3]))
     last_inv_latents_path = os.path.join(inv_latents_path, inv_latents[-1])
     
     # Compute and save end CLIP Score on training set
