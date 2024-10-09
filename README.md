@@ -7,7 +7,7 @@ This is the official repository that contains the code implementing **VidCLearn*
 ## Abstract
 *Work in progress...*
 
-## Dataset
+## Results
 *Work in progress...*
 
 ## Setup
@@ -61,7 +61,16 @@ This is the official repository that contains the code implementing **VidCLearn*
 - Enjoy the results!
 
 ## Authors
-[Luca Zanchetta](), [Lorenzo Papa](), [Luca Maiano](), [Irene Amerini]().
+Luca Zanchetta [[Email]()] [[GitHub]()] [[Scholar]()]
+
+Lorenzo Papa [[Email]()] [[GitHub]()] [[Scholar]()]
+
+Luca Maiano [[Email]()] [[GitHub]()] [[Scholar]()]
+
+Irene Amerini [[Email]()] [[GitHub]()] [[Scholar]()]
 
 ## Acknowledgements
 The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video). The data has been taken from the [DAVIS Dataset](https://davischallenge.org/davis2017/code.html) and has been manipulated accordingly.
+
+## Cite Us
+*Work in progress...*
