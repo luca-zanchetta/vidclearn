@@ -70,7 +70,7 @@ Luca Maiano [[Email]()] [[GitHub]()] [[Scholar]()]
 Irene Amerini [[Email]()] [[GitHub]()] [[Scholar]()]
 
 ## Acknowledgements
-The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video). The data has been taken from the [DAVIS Dataset](https://davischallenge.org/davis2017/code.html) and has been manipulated accordingly.
+The code is based on [Tune-A-Video](https://github.com/showlab/Tune-A-Video) and [Stable Diffusion v1.4](https://huggingface.co/CompVis/stable-diffusion-v1-4). The data has been taken from the [DAVIS Dataset](https://davischallenge.org/davis2017/code.html) and has been manipulated accordingly.
 
 ## Cite Us
 *Work in progress...*
