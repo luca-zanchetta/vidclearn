@@ -49,6 +49,6 @@ def compute_evolution_rate(clip_file):
                     continue
                 
                 evo_rate = avg_clip_current - avg_clip_prec
-                evo_file.write(f"{video_n}:{evo_rate}")
+                evo_file.write(f"{video_n}:{round(evo_rate, 3)}\n")
             evo_file.close()
         file.close()
