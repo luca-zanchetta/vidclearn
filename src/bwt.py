@@ -21,8 +21,8 @@ def compute_bwt(tot_train_videos, clip_file_middle, clip_file_end):
             video_n, clip_current = line.strip().split(':')
             end_scores.append(float(clip_current))
     
-    for i in tqdm(range(1, tot_train_videos), desc='Computing BWT', total=tot_train_videos):
-        summation += (end_scores[i-1] - middle_scores[i-1])
+    for i in tqdm(range(0, tot_train_videos), desc='Computing BWT', total=tot_train_videos):
+        summation += (end_scores[i] - middle_scores[i])
     
     bwt = const * summation
     return bwt

@@ -26,7 +26,7 @@ def compute_fwt(tot_train_videos, clip_file):
             if int(video_n) == 0:
                 avg_clip_init = avg_clip_current
             
-            if int(video_n) >= 2:
+            if int(video_n) >= 1:
                 summation += (avg_clip_current - avg_clip_init)
         
         file.close()
