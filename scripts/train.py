@@ -28,10 +28,10 @@ from tuneavideo.data.dataset import TuneAVideoDataset
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
-from src.ewc import EWC
 from src.distillation_loss import distillation_loss
 from src.train_eval import init_eval_test, middle_eval_test, middle_eval_train, end_eval_train
-
+from src.motion_consistency_loss import compute_video_optical_flow, motion_consistency_loss
+from src.utils import load_video, generate_video, extract_frames_from_video
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
@@ -50,9 +50,7 @@ def main(
     clip_file_train_middle: str,
     validation_data: Dict,
     save_models: List,
-    fisher_importance: float = 0.5,
     temperature: float = 1.0,
-    lambda_temporal: float = 0.01,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -80,7 +78,6 @@ def main(
     seed: Optional[int] = None
 ):
     *_, config = inspect.getargvalues(inspect.currentframe())
-    ewc = None
 
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
@@ -112,8 +109,8 @@ def main(
         os.makedirs(output_dir, exist_ok=True)
         os.makedirs(f"{output_dir}/last_model", exist_ok=True)
         os.makedirs(f"{output_dir}/samples", exist_ok=True)
-        os.makedirs(f"{output_dir}/ewc", exist_ok=True)
         os.makedirs(f"{output_dir}/inv_latents", exist_ok=True)
+        os.makedirs(f"{output_dir}/tmp", exist_ok=True)
         OmegaConf.save(config, os.path.join(output_dir, 'config.yaml'))
 
     # Load scheduler, tokenizer and models.
@@ -225,23 +222,6 @@ def main(
         unet, optimizer, train_dataloader, lr_scheduler
     )
     
-    if resume_from_checkpoint is not None and os.path.exists(f"{output_dir}/fisher_{model_n-1}.pt"):
-        fisher_info = torch.load(f"{output_dir}/fisher_{model_n-1}.pt")
-        means = torch.load(f"{output_dir}/means_{model_n-1}.pt")
-        ewc = EWC(
-            model=unet,
-            dataloader=train_dataloader,
-            criterion=F.mse_loss,
-            noise_scheduler=noise_scheduler,
-            vae=vae,
-            text_encoder=text_encoder,
-            accelerator=accelerator,
-            n_sample_frames=train_data.n_sample_frames,
-            device=accelerator.device
-        )
-        ewc._precision_matrices = fisher_info
-        ewc._means = means
-
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
     # as these models are only used for inference, keeping weights in full precision is not required.
     weight_dtype = torch.float32
@@ -351,7 +331,7 @@ def main(
                 else:
                     raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
 
-                # Predict the noise residual and compute loss
+                # Predict the noise residual and compute reconstruction loss
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
                 mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                 
@@ -364,21 +344,32 @@ def main(
                     temperature=temperature
                 )
                 
-                # EWC penalty
-                ewc_penalty = ewc.penalty(unet) if ewc is not None else 0.0
+                # Compute motion consistency loss
+                reference_video = load_video(
+                    video_path=video_path, 
+                    num_frames=train_data.n_sample_frames,
+                    frame_size=(train_data.width, train_data.height)
+                )
+                reference_optical_flow = compute_video_optical_flow(reference_video)
+                reference_frames = extract_frames_from_video(reference_video, (train_data.width, train_data.height))
                 
-                # Temporal Consistency loss
-                temporal_loss = 0.0
-                if latents.shape[2] > 1:    # Ensure there are multiple frames to compare
-                    # Shift the latents by 1 along the frame dimension
-                    latents_next_frame = latents[:, :, 1:, :, :]        # Frame 2 onwards
-                    latents_current_frame = latents[:, :, :-1, :, :]    # Frame 1 to second last
-                    
-                    # Compute temporal consistency loss
-                    temporal_loss = F.l1_loss(latents_current_frame, latents_next_frame)
+                ddim_inv_latent = ddim_inversion(
+                    validation_pipeline, ddim_inv_scheduler, video_latent=latents,
+                    num_inv_steps=validation_data.num_inv_steps, prompt="")[-1].to(weight_dtype)
                 
-                # Compute adjusted loss
-                loss = mse_loss + fisher_importance * ewc_penalty + distill_loss + lambda_temporal * temporal_loss
+                generated_video = load_video(
+                    video_path=generate_video(pretrained_model_path, unet, ddim_inv_latent, prompt_dataset, validation_data),
+                    num_frames=train_data.n_sample_frames,
+                    frame_size=(train_data.width, train_data.height)
+                )
+                generated_optical_flow = compute_video_optical_flow(generated_video)
+                generated_frames = extract_frames_from_video(generated_video, (train_data.width, train_data.height))
+                
+                del ddim_inv_latent, reference_video, generated_video
+                mcloss = motion_consistency_loss(generated_frames, reference_frames, generated_optical_flow, reference_optical_flow)                
+                
+                # Combine losses
+                loss = mse_loss + distill_loss + mcloss
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -461,21 +452,7 @@ def main(
 
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
-        ewc = EWC(
-            model=unet,
-            dataloader=train_dataloader,
-            criterion=F.mse_loss,
-            noise_scheduler=noise_scheduler,
-            vae=vae,
-            text_encoder=text_encoder,
-            accelerator=accelerator,
-            n_sample_frames=train_data.n_sample_frames,
-            device=accelerator.device
-        )
-        torch.save(ewc._precision_matrices, f"{output_dir}/ewc/fisher_{model_n}.pt")
-        torch.save(ewc._means, f"{output_dir}/ewc/means_{model_n}.pt")
-        
+    if accelerator.is_main_process:        
         unet = accelerator.unwrap_model(unet)
         pipeline = TuneAVideoPipeline.from_pretrained(
             pretrained_model_path,
@@ -509,9 +486,9 @@ def continual_training(
     train_data: Dict,
     validation_data: Dict,
     save_models: List,
-    fisher_importance: float = 0.5,
+    # fisher_importance: float = 0.5,
     temperature: float = 1.0,
-    lambda_temporal: float = 0.01,
+    # lambda_temporal: float = 0.01,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -560,9 +537,7 @@ def continual_training(
                 pretrained_model_path = pretrained_model_path,
                 output_dir = output_dir,
                 train_data = train_data,
-                fisher_importance = fisher_importance,
                 temperature = temperature,
-                lambda_temporal = lambda_temporal,
                 save_models = save_models,
                 model_n = i,
                 plot_loss_file = plot_loss_file,

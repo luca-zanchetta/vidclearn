@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import cv2
+from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
+from tuneavideo.util import save_videos_grid
 
 # Function to load and preprocess video
 def load_video(video_path, num_frames=16, frame_size=(256, 256)):
@@ -25,3 +27,31 @@ def load_video(video_path, num_frames=16, frame_size=(256, 256)):
     video = np.array(frames, dtype=np.uint8)
     video = torch.tensor(video, dtype=torch.uint8)
     return video.permute(3, 0, 1, 2)  # Convert to (C, T, H, W)
+
+def extract_frames_from_video(video, target_size=(299, 299)):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    frames = video.permute(1, 2, 3, 0).numpy()
+    frames = [cv2.resize(frame, target_size) for frame in frames]
+    frames = [torch.tensor(frame, dtype=torch.uint8).permute(2, 0, 1).unsqueeze(0).to(device) for frame in frames]
+    return frames
+
+def generate_video(pretrained_model_path, unet, ddim_inv_latent, prompt, validation_data):
+    pipe = TuneAVideoPipeline.from_pretrained(pretrained_model_path, unet=unet, torch_dtype=torch.float16).to("cuda")
+    pipe.enable_xformers_memory_efficient_attention()
+    pipe.enable_vae_slicing()
+    
+    video = pipe(
+        prompt, 
+        latents=ddim_inv_latent, 
+        video_length=validation_data.video_length,
+        height=validation_data.height,
+        width=validation_data.width, 
+        num_inference_steps=validation_data.num_inference_steps,
+        guidance_scale=validation_data.guidance_scale
+    ).videos
+    
+    # Save generated video
+    save_path = f'./tmp/video.mp4'
+    save_videos_grid(video, save_path)
+    del video, pipe
+    return save_path
