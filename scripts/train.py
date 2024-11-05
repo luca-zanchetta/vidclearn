@@ -370,16 +370,11 @@ def main(
                 mcloss = motion_consistency_loss(generated_frames, reference_frames, generated_optical_flow, reference_optical_flow)                
                 
                 # Combine losses
-                print(f"[INFO] mse_loss: {mse_loss.item()}")
-                print(f"[INFO] distill_loss: {distill_loss.item()}")
-                print(f"[INFO] mc_loss: {mcloss.item()}")
-                print(f"[INFO] weighted mc_loss: {motion_consistency_weight * mcloss.item()}")
                 loss = mse_loss + distill_loss + motion_consistency_weight * mcloss
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
                 train_loss += avg_loss.item() / gradient_accumulation_steps
-                print(f"[INFO] train_loss: {train_loss}")
 
                 # Backpropagate
                 accelerator.backward(loss)
