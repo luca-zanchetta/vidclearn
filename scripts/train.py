@@ -51,6 +51,7 @@ def main(
     validation_data: Dict,
     save_models: List,
     temperature: float = 1.0,
+    motion_consistency_weight: float = 0.001,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -369,11 +370,16 @@ def main(
                 mcloss = motion_consistency_loss(generated_frames, reference_frames, generated_optical_flow, reference_optical_flow)                
                 
                 # Combine losses
-                loss = mse_loss + distill_loss + mcloss
+                print(f"[INFO] mse_loss: {mse_loss.item()}")
+                print(f"[INFO] distill_loss: {distill_loss.item()}")
+                print(f"[INFO] mc_loss: {mcloss.item()}")
+                print(f"[INFO] weighted mc_loss: {motion_consistency_weight * mcloss.item()}")
+                loss = mse_loss + distill_loss + motion_consistency_weight * mcloss
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
                 train_loss += avg_loss.item() / gradient_accumulation_steps
+                print(f"[INFO] train_loss: {train_loss}")
 
                 # Backpropagate
                 accelerator.backward(loss)
@@ -486,9 +492,10 @@ def continual_training(
     train_data: Dict,
     validation_data: Dict,
     save_models: List,
-    # fisher_importance: float = 0.5,
+    fisher_importance: float = 0.5,
     temperature: float = 1.0,
-    # lambda_temporal: float = 0.01,
+    lambda_temporal: float = 0.01,
+    motion_consistency_weight: float = 0.001,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -538,6 +545,7 @@ def continual_training(
                 output_dir = output_dir,
                 train_data = train_data,
                 temperature = temperature,
+                motion_consistency_weight = motion_consistency_weight,
                 save_models = save_models,
                 model_n = i,
                 plot_loss_file = plot_loss_file,

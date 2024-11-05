@@ -442,6 +442,7 @@ def continual_training(
     fisher_importance: float = 0.5,
     temperature: float = 1.0,
     lambda_temporal: float = 0.01,
+    motion_consistency_weight: float = 0.001,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
