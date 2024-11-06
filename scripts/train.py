@@ -30,8 +30,9 @@ from tuneavideo.util import save_videos_grid, ddim_inversion
 from einops import rearrange
 from src.distillation_loss import distillation_loss
 from src.train_eval import init_eval_test, middle_eval_test, middle_eval_train, end_eval_train
-from src.motion_consistency_loss import compute_video_optical_flow, motion_consistency_loss
-from src.utils import load_video, generate_video, extract_frames_from_video
+from src.temporal_loss import temporal_loss
+
+from time import sleep
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
@@ -51,7 +52,7 @@ def main(
     validation_data: Dict,
     save_models: List,
     temperature: float = 1.0,
-    motion_consistency_weight: float = 0.001,
+    lambda_temporal: float = 0.1,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -345,32 +346,11 @@ def main(
                     temperature=temperature
                 )
                 
-                # Compute motion consistency loss
-                reference_video = load_video(
-                    video_path=video_path, 
-                    num_frames=train_data.n_sample_frames,
-                    frame_size=(train_data.width, train_data.height)
-                )
-                reference_optical_flow = compute_video_optical_flow(reference_video)
-                reference_frames = extract_frames_from_video(reference_video, (train_data.width, train_data.height))
-                
-                ddim_inv_latent = ddim_inversion(
-                    validation_pipeline, ddim_inv_scheduler, video_latent=latents,
-                    num_inv_steps=validation_data.num_inv_steps, prompt="")[-1].to(weight_dtype)
-                
-                generated_video = load_video(
-                    video_path=generate_video(pretrained_model_path, unet, ddim_inv_latent, prompt_dataset, validation_data),
-                    num_frames=train_data.n_sample_frames,
-                    frame_size=(train_data.width, train_data.height)
-                )
-                generated_optical_flow = compute_video_optical_flow(generated_video)
-                generated_frames = extract_frames_from_video(generated_video, (train_data.width, train_data.height))
-                
-                del ddim_inv_latent, reference_video, generated_video
-                mcloss = motion_consistency_loss(generated_frames, reference_frames, generated_optical_flow, reference_optical_flow)                
+                # Temporal Consistency loss
+                t_loss = temporal_loss(model_pred)
                 
                 # Combine losses
-                loss = mse_loss + distill_loss + motion_consistency_weight * mcloss
+                loss = mse_loss + distill_loss + lambda_temporal * t_loss
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -490,7 +470,6 @@ def continual_training(
     fisher_importance: float = 0.5,
     temperature: float = 1.0,
     lambda_temporal: float = 0.01,
-    motion_consistency_weight: float = 0.001,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -540,7 +519,7 @@ def continual_training(
                 output_dir = output_dir,
                 train_data = train_data,
                 temperature = temperature,
-                motion_consistency_weight = motion_consistency_weight,
+                lambda_temporal = lambda_temporal,
                 save_models = save_models,
                 model_n = i,
                 plot_loss_file = plot_loss_file,
