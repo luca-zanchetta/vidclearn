@@ -31,10 +31,10 @@ validation_data:
   use_inv_latent: True
   num_inv_steps: 100
 
-# fisher_importance: 0.5
 save_models: [1, 5, 10, 25, 50, 75, 90]
+# fisher_importance: 0.0
 temperature: 1.0
-lambda_temporal: 0.1
+lambda_temporal: 1.0
 learning_rate: 3e-5
 train_steps_per_video: 500
 checkpointing_steps: 500

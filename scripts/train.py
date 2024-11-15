@@ -32,8 +32,6 @@ from src.distillation_loss import distillation_loss
 from src.train_eval import init_eval_test, middle_eval_test, middle_eval_train, end_eval_train
 from src.temporal_loss import temporal_loss
 
-from time import sleep
-
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
 logger = get_logger(__name__, log_level="INFO")
@@ -347,10 +345,10 @@ def main(
                 )
                 
                 # Temporal Consistency loss
-                t_loss = temporal_loss(model_pred)
+                t_loss = temporal_loss(model_pred, noisy_latents)
                 
                 # Combine losses
-                loss = mse_loss + distill_loss + lambda_temporal * t_loss
+                loss = mse_loss + distill_loss + lambda_temporal * t_loss                
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
