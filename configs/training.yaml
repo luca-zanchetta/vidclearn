@@ -34,7 +34,9 @@ validation_data:
 save_models: [1, 5, 10, 25, 50, 75, 90]
 # fisher_importance: 0.0
 temperature: 1.0
-lambda_temporal: 1.0
+mse_weight: 1.0
+distill_weight: 1.0
+temporal_weight: 1.0
 learning_rate: 3e-5
 train_steps_per_video: 500
 checkpointing_steps: 500

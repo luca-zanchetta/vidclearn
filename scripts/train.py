@@ -50,7 +50,9 @@ def main(
     validation_data: Dict,
     save_models: List,
     temperature: float = 1.0,
-    lambda_temporal: float = 0.1,
+    mse_weight: float = 1.0,
+    distill_weight: float = 1.0,
+    temporal_weight: float = 1.0,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -336,19 +338,21 @@ def main(
                 mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                 
                 # Compute distillation loss
-                with torch.no_grad():
-                    teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
-                distill_loss = distillation_loss(
-                    student_output=model_pred,
-                    teacher_output=teacher_output,
-                    temperature=temperature
-                )
+                distill_loss = 0.0
+                if model_n > 1:
+                    with torch.no_grad():
+                        teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
+                    distill_loss = distillation_loss(
+                        student_output=model_pred,
+                        teacher_output=teacher_output,
+                        temperature=temperature
+                    )
                 
                 # Temporal Consistency loss
                 t_loss = temporal_loss(model_pred, noisy_latents)
                 
                 # Combine losses
-                loss = mse_loss + distill_loss + lambda_temporal * t_loss                
+                loss = (mse_weight * mse_loss) + (distill_weight * distill_loss) + (temporal_weight * t_loss)
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -467,7 +471,9 @@ def continual_training(
     save_models: List,
     fisher_importance: float = 0.5,
     temperature: float = 1.0,
-    lambda_temporal: float = 0.01,
+    mse_weight: float = 1.0,
+    distill_weight: float = 1.0,
+    temporal_weight: float = 1.0,
     validation_steps: int = 100,
     trainable_modules: Tuple[str] = (
         "attn1.to_q",
@@ -517,7 +523,9 @@ def continual_training(
                 output_dir = output_dir,
                 train_data = train_data,
                 temperature = temperature,
-                lambda_temporal = lambda_temporal,
+                mse_weight = mse_weight,
+                distill_weight = distill_weight,
+                temporal_weight = temporal_weight,
                 save_models = save_models,
                 model_n = i,
                 plot_loss_file = plot_loss_file,
