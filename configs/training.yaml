@@ -32,9 +32,8 @@ validation_data:
   num_inv_steps: 100
 
 save_models: [1, 5, 10, 25, 50, 75, 90]
-# fisher_importance: 0.0
-temperature: 1.0
-mse_weight: 1.0
+temperature: 4.0
+alpha_distillation: 0.7
 distill_weight: 1.0
 temporal_weight: 1.0
 learning_rate: 3e-5

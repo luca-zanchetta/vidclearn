@@ -50,7 +50,7 @@ def main(
     validation_data: Dict,
     save_models: List,
     temperature: float = 1.0,
-    mse_weight: float = 1.0,
+    alpha_distillation: float = 1.0,
     distill_weight: float = 1.0,
     temporal_weight: float = 1.0,
     validation_steps: int = 100,
@@ -333,9 +333,8 @@ def main(
                 else:
                     raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
 
-                # Predict the noise residual and compute reconstruction loss
+                # Predict the noise residual
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-                mse_loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
                 
                 # Compute distillation loss
                 distill_loss = 0.0
@@ -345,14 +344,16 @@ def main(
                     distill_loss = distillation_loss(
                         student_output=model_pred,
                         teacher_output=teacher_output,
-                        temperature=temperature
+                        target=target,
+                        temperature=temperature,
+                        alpha=alpha_distillation,
                     )
                 
                 # Temporal Consistency loss
                 t_loss = temporal_loss(model_pred, noisy_latents)
                 
                 # Combine losses
-                loss = (mse_weight * mse_loss) + (distill_weight * distill_loss) + (temporal_weight * t_loss)
+                loss = (distill_weight * distill_loss) + (temporal_weight * t_loss)
 
                 # Gather the losses across all processes for logging (if we use distributed training).
                 avg_loss = accelerator.gather(loss.repeat(train_batch_size)).mean()
@@ -469,9 +470,8 @@ def continual_training(
     train_data: Dict,
     validation_data: Dict,
     save_models: List,
-    fisher_importance: float = 0.5,
     temperature: float = 1.0,
-    mse_weight: float = 1.0,
+    alpha_distillation: float = 1.0,
     distill_weight: float = 1.0,
     temporal_weight: float = 1.0,
     validation_steps: int = 100,
@@ -523,7 +523,7 @@ def continual_training(
                 output_dir = output_dir,
                 train_data = train_data,
                 temperature = temperature,
-                mse_weight = mse_weight,
+                alpha_distillation = alpha_distillation,
                 distill_weight = distill_weight,
                 temporal_weight = temporal_weight,
                 save_models = save_models,
