@@ -338,6 +338,7 @@ def main(
                 
                 # Compute distillation loss
                 distill_loss = 0.0
+                teacher_output = None
                 if model_n > 1:
                     with torch.no_grad():
                         teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
