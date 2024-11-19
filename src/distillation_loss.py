@@ -1,12 +1,14 @@
 import torch.nn.functional as F
 
-def distillation_loss(student_output, teacher_output, target, temperature, alpha):
+def distillation_loss(student_output, teacher_output, target, temperature, alpha, model_n):
     """
     Compute distillation loss using KL divergence between the student and teacher model outputs.
     """
     
     # Reconstruction loss:
     mse_loss = F.mse_loss(student_output.float(), target.float(), reduction="mean")
+    if model_n == 1:
+        return mse_loss
     
     # KL Divergence loss:
     teacher_output = F.softmax(teacher_output / temperature, dim=-1)

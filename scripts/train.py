@@ -337,18 +337,16 @@ def main(
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
                 
                 # Compute distillation loss
-                distill_loss = 0.0
-                teacher_output = None
-                if model_n > 1:
-                    with torch.no_grad():
-                        teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
-                    distill_loss = distillation_loss(
-                        student_output=model_pred,
-                        teacher_output=teacher_output,
-                        target=target,
-                        temperature=temperature,
-                        alpha=alpha_distillation,
-                    )
+                with torch.no_grad():
+                    teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
+                distill_loss = distillation_loss(
+                    student_output=model_pred,
+                    teacher_output=teacher_output,
+                    target=target,
+                    temperature=temperature,
+                    alpha=alpha_distillation,
+                    model_n=model_n
+                )
                 
                 # Temporal Consistency loss
                 t_loss = temporal_loss(model_pred, noisy_latents)
