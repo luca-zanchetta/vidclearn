@@ -1,7 +1,7 @@
 import torch.nn.functional as F
 
-def temporal_loss(model_pred, noisy_latents):
-    noisy_latents_diff = (noisy_latents[:, :, 1:] - noisy_latents[:, :, :-1]).float()
-    model_pred_diff = (model_pred[:, :, 1:] - model_pred[:, :, :-1]).float()
+def temporal_loss(student_output, target):
+    target_diff = (target[:, :, 1:] - target[:, :, :-1]).float()
+    student_output_diff = (student_output[:, :, 1:] - student_output[:, :, :-1]).float()
     
-    return F.mse_loss(model_pred_diff, noisy_latents_diff)
+    return F.mse_loss(target_diff, student_output_diff, reduction='mean')

@@ -349,7 +349,10 @@ def main(
                 )
                 
                 # Temporal Consistency loss
-                t_loss = temporal_loss(model_pred, noisy_latents)
+                t_loss = temporal_loss(
+                    student_output=model_pred,
+                    target=target
+                )
                 
                 # Combine losses
                 loss = (distill_weight * distill_loss) + (temporal_weight * t_loss)
