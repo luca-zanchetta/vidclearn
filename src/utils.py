@@ -55,3 +55,20 @@ def generate_video(pretrained_model_path, unet, ddim_inv_latent, prompt, validat
     save_videos_grid(video, save_path)
     del video, pipe
     return save_path
+
+def save_frames_to_video(frames, output_path, fps=8):
+    if not frames:
+        raise ValueError("No frames to save!")
+
+    # Get the frame size (assumes all frames have the same dimensions)
+    frame_height, frame_width, channels = frames[0].shape
+    frame_size = (frame_width, frame_height)
+
+    # Define the codec and create a VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec for .mp4 files
+    out = cv2.VideoWriter(output_path, fourcc, fps, frame_size)
+
+    for frame in frames:
+        out.write(frame)  # Write each frame to the video
+
+    out.release()

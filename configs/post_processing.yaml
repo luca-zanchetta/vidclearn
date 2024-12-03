@@ -1,0 +1,4 @@
+video_path: "./inference_samples/inference_samples_3/14.gif"
+prompts_file: "./data/test_captions.txt"
+avg_clip_score: 0.0
+output_folder: "./post_videos/"
