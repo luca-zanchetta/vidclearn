@@ -16,7 +16,8 @@ def inference(
     height: int,
     width: int,
     inference_steps: int,
-    guidance_scale: float
+    guidance_scale: float,
+    seed: int
 ):
     curr_video = 0
     
@@ -43,7 +44,8 @@ def inference(
                 height=height,
                 width=width, 
                 num_inference_steps=inference_steps,
-                guidance_scale=guidance_scale
+                guidance_scale=guidance_scale,
+                generator = torch.Generator(device='cuda').manual_seed(seed),
             ).videos
 
             # Save generated video
