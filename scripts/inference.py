@@ -28,6 +28,7 @@ def inference(
 
     # Perform inference
     ddim_inv_latent = torch.load(inv_latent_path).to(torch.float16)
+    initial_noise = torch.rand_like(ddim_inv_latent)
     with open(prompt_file, 'r') as file:
         lines = file.readlines()
         
@@ -37,7 +38,7 @@ def inference(
         
             video = pipe(
                 prompt, 
-                latents=ddim_inv_latent, 
+                latents=initial_noise, 
                 video_length=frames_per_video,
                 height=height,
                 width=width, 
