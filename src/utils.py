@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import cv2
+import os
+import imageio
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid
 
@@ -72,3 +74,7 @@ def save_frames_to_video(frames, output_path, fps=8):
         out.write(frame)  # Write each frame to the video
 
     out.release()
+    
+def save_frames_to_gif(frames, output_path, fps=10):
+    frame_duration = 1 / fps
+    imageio.mimsave(output_path, frames, format='GIF', duration=frame_duration)
