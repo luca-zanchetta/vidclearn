@@ -16,8 +16,7 @@ def inference(
     height: int,
     width: int,
     inference_steps: int,
-    guidance_scale: float,
-    seed: int
+    guidance_scale: float
 ):
     curr_video = 0
     
@@ -29,7 +28,6 @@ def inference(
 
     # Perform inference
     ddim_inv_latent = torch.load(inv_latent_path).to(torch.float16)
-    initial_noise = torch.rand_like(ddim_inv_latent)
     with open(prompt_file, 'r') as file:
         lines = file.readlines()
         
@@ -39,13 +37,12 @@ def inference(
         
             video = pipe(
                 prompt, 
-                latents=initial_noise, 
+                latents=ddim_inv_latent, 
                 video_length=frames_per_video,
                 height=height,
                 width=width, 
                 num_inference_steps=inference_steps,
-                guidance_scale=guidance_scale,
-                generator = torch.Generator(device='cuda').manual_seed(seed),
+                guidance_scale=guidance_scale
             ).videos
 
             # Save generated video
