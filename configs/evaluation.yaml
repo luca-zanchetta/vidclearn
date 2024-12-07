@@ -1,4 +1,4 @@
-test_n: 1
+generated_videos_folder: './inference_samples/inference_samples_1'
 real_videos_folder: './data/test_videos'
 train_videos_folder: './data/train_videos'
 clip_file_test: 'data/clip_file_test.txt'

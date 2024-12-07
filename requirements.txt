@@ -21,3 +21,4 @@ torchmetrics
 scipy
 torchmetrics[image]
 matplotlib
+moviepy==1.0.3

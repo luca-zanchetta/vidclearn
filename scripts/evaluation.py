@@ -12,7 +12,7 @@ from tqdm import tqdm
 from omegaconf import OmegaConf
 
 def evaluation(
-    test_n: int,
+    generated_videos_folder: str,
     real_videos_folder: str,
     train_videos_folder: str,
     clip_file_test: str,
@@ -25,7 +25,6 @@ def evaluation(
 ):
     frame_size = (width, height)
     tot_train_videos = len(os.listdir(train_videos_folder))
-    generated_videos_folder = f'./inference_samples/inference_samples_{test_n}/'
 
     # Load videos
     print("\n[INFO] Loading real videos...")
