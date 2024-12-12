@@ -5,13 +5,15 @@ from tuneavideo.models.unet import UNet3DConditionModel
 from tuneavideo.util import save_videos_grid
 from tqdm import tqdm
 from omegaconf import OmegaConf
+from src.structural_guidance import choose_inv_latent
+
 
 def inference(
     pretrained_model_path: str,
     model_path: str,
     prompt_file: str,
+    train_prompts_file: str,
     test_n: int,
-    inv_latent_path: str,
     frames_per_video: int,
     height: int,
     width: int,
@@ -19,22 +21,26 @@ def inference(
     guidance_scale: float
 ):
     curr_video = 0
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Setup model
-    unet = UNet3DConditionModel.from_pretrained(model_path, subfolder='unet', torch_dtype=torch.float16).to('cuda')
-    pipe = TuneAVideoPipeline.from_pretrained(pretrained_model_path, unet=unet, torch_dtype=torch.float16).to("cuda")
+    unet = UNet3DConditionModel.from_pretrained(model_path, subfolder='unet', torch_dtype=torch.float16).to(device)
+    pipe = TuneAVideoPipeline.from_pretrained(pretrained_model_path, unet=unet, torch_dtype=torch.float16).to(device)
     pipe.enable_xformers_memory_efficient_attention()
     pipe.enable_vae_slicing()
 
     # Perform inference
-    ddim_inv_latent = torch.load(inv_latent_path).to(torch.float16)
     with open(prompt_file, 'r') as file:
         lines = file.readlines()
         
         for line in tqdm(lines, desc='Inference'):
             video_name, prompt = line.strip().split(':')
             curr_video += 1
-        
+            
+            # Determine training video for structural guidance
+            ddim_inv_latent = choose_inv_latent(train_prompts_file, prompt)
+            
+            # Generate video
             video = pipe(
                 prompt, 
                 latents=ddim_inv_latent, 
