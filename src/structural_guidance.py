@@ -1,7 +1,7 @@
 import torch
 from sentence_transformers import SentenceTransformer, util
 
-def choose_inv_latent(train_prompts_file, inference_prompt):
+def choose_inv_latent(train_prompts_file, inference_prompt, model_n = 90):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     inv_latent_path = "final_model/inv_latents/ddim_latent-"
     
@@ -12,7 +12,10 @@ def choose_inv_latent(train_prompts_file, inference_prompt):
     scores = []
     with open(train_prompts_file, 'r') as file:
         lines = file.readlines()
-        for line in lines:
+        for idx, line in enumerate(lines):
+            if idx+1 > model_n:
+                break
+            
             video_name, train_prompt = line.strip().split(':')
             
             embeddings = model.encode([inference_prompt, train_prompt], convert_to_tensor=True)

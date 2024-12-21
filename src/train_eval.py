@@ -9,6 +9,7 @@ from tuneavideo.util import ddim_inversion, save_videos_grid
 from src.clip_multiple import compute_clip_score
 from src.clip import compute_clip_score_single
 from src.utils import load_video
+from src.structural_guidance import choose_inv_latent
 from tqdm import tqdm
 
 def init_eval_test(model_path, prompt_file, validation_data, accelerator):
@@ -75,19 +76,22 @@ def init_eval_test(model_path, prompt_file, validation_data, accelerator):
     del videos, generated_videos, unet, pipe, ddim_inv_scheduler
     return clip_score
 
-def middle_eval_test(model_path, unet, prompt_file, validation_data, inv_latents_path, accelerator):   
+def middle_eval_test(model_path, unet, prompt_file, validation_data, prompt_file_train, accelerator, model_n):   
     # Setup model
+    unet = unet.to(dtype=torch.float16)
     pipe = TuneAVideoPipeline.from_pretrained(model_path, unet=unet, torch_dtype=torch.float16).to(accelerator.device)
     pipe.enable_xformers_memory_efficient_attention()
     pipe.enable_vae_slicing()
     
     # Perform inference
-    ddim_inv_latent = torch.load(inv_latents_path).to(torch.float16)
     with open(prompt_file, 'r') as file:
         lines = file.readlines()
         
         for idx, line in tqdm(enumerate(lines), desc='Inference on test set', total=len(lines)):
             video_name, prompt = line.strip().split(':')
+            
+            # Determine training video for structural guidance
+            ddim_inv_latent = choose_inv_latent(prompt_file_train, prompt, model_n)
         
             video = pipe(
                 prompt,
@@ -125,6 +129,7 @@ def middle_eval_test(model_path, unet, prompt_file, validation_data, inv_latents
 
 def middle_eval_train(model_path, unet, prompt, validation_data, inv_latents_path, accelerator):
     # Setup model
+    unet = unet.to(dtype=torch.float16)
     pipe = TuneAVideoPipeline.from_pretrained(model_path, unet=unet, torch_dtype=torch.float16).to(accelerator.device)
     pipe.enable_xformers_memory_efficient_attention()
     pipe.enable_vae_slicing()
@@ -160,7 +165,7 @@ def middle_eval_train(model_path, unet, prompt, validation_data, inv_latents_pat
     del video, ddim_inv_latent, pipe
     return clip_score
     
-def end_eval_train(pretrained_model_path, last_model_path, prompts, validation_data, inv_latents_path, mixed_precision, clip_file):
+def end_eval_train(pretrained_model_path, last_model_path, prompts, validation_data, prompt_file_train, mixed_precision, clip_file):
     # Setup model
     weight_dtype = torch.float32
     if mixed_precision == "fp16":
@@ -174,8 +179,8 @@ def end_eval_train(pretrained_model_path, last_model_path, prompts, validation_d
     pipe.enable_vae_slicing()
     
     # Perform inference
-    ddim_inv_latent = torch.load(inv_latents_path).to(torch.float16)
     for idx, prompt in tqdm(enumerate(prompts), desc='Inference on train set', total=len(prompts)):
+        ddim_inv_latent = choose_inv_latent(prompt_file_train, prompt)
         video = pipe(
             prompt,
             latents=ddim_inv_latent,

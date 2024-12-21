@@ -44,6 +44,7 @@ def main(
     plot_loss_file: str,
     video_path: str,
     prompt_dataset: str,
+    prompt_file_train: str,
     prompt_file_test: str,
     clip_file_test: str,
     clip_file_train_middle: str,
@@ -403,7 +404,7 @@ def main(
                             torch.save(ddim_inv_latent, inv_latents_path)
                             
                             # Compute and save CLIP Score on test set
-                            clip_score = middle_eval_test(pretrained_model_path, unet, prompt_file_test, validation_data, inv_latents_path, accelerator)
+                            clip_score = middle_eval_test(pretrained_model_path, unet, prompt_file_test, validation_data, prompt_file_train, accelerator)
                             with open(clip_file_test, "a") as file:
                                 file.write(f"{model_n}:{clip_score}\n")
                                 file.close()
@@ -413,16 +414,6 @@ def main(
                             with open(clip_file_train_middle, "a") as file:
                                 file.write(f"{model_n}:{clip_score_train}\n")
                                 file.close()
-
-                        for idx, prompt in enumerate(validation_data.prompts):
-                            sample = validation_pipeline(prompt, generator=generator, latents=ddim_inv_latent,
-                                                         **validation_data).videos
-                            save_videos_grid(sample, f"{output_dir}/samples/sample-{global_step}/{prompt}.gif")
-                            samples.append(sample)
-                        samples = torch.concat(samples)
-                        save_path = f"{output_dir}/samples/sample-{global_step}.gif"
-                        save_videos_grid(samples, save_path)
-                        logger.info(f"Saved samples to {save_path}")
                     
                         # Garbage collection
                         del samples, ddim_inv_latent, generator, batch, encoder_hidden_states
@@ -533,6 +524,7 @@ def continual_training(
                 plot_loss_file = plot_loss_file,
                 video_path = video_path,
                 prompt_dataset = prompt_dataset,
+                prompt_file_train = prompt_file,
                 prompt_file_test = prompt_file_test,
                 clip_file_test = clip_file_test,
                 clip_file_train_middle = clip_file_train_middle,
@@ -567,16 +559,9 @@ def continual_training(
         
         f.close()
     
-    # Determine the last inverted latent
-    inv_latents_path = os.path.join(output_dir, "inv_latents/")
-    inv_latents = os.listdir(inv_latents_path)
-    inv_latents = [l for l in inv_latents if l.startswith("ddim_latent")]
-    inv_latents = sorted(inv_latents, key=lambda x: int(x.split("-")[1][:-3]))
-    last_inv_latents_path = os.path.join(inv_latents_path, inv_latents[-1])
-    
     # Compute and save end CLIP Score on training set
     last_model_path = os.path.join(output_dir, "last_model/")
-    end_eval_train(pretrained_model_path, last_model_path, training_prompts, validation_data, last_inv_latents_path, mixed_precision, clip_file_train_end)
+    end_eval_train(pretrained_model_path, last_model_path, training_prompts, validation_data, prompt_file, mixed_precision, clip_file_train_end)
     
 
 if __name__ == "__main__":
