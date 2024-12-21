@@ -79,7 +79,7 @@ def init_eval_test(model_path, prompt_file, validation_data, accelerator):
 def middle_eval_test(model_path, unet, prompt_file, validation_data, prompt_file_train, accelerator, model_n):   
     # Setup model
     unet = unet.to(dtype=torch.float16)
-    pipe = TuneAVideoPipeline.from_pretrained(model_path, unet=unet, torch_dtype=torch.float16).to(accelerator.device)
+    pipe = TuneAVideoPipeline.from_pretrained(model_path, unet=unet.model, torch_dtype=torch.float16).to(accelerator.device)
     pipe.enable_xformers_memory_efficient_attention()
     pipe.enable_vae_slicing()
     
@@ -130,7 +130,7 @@ def middle_eval_test(model_path, unet, prompt_file, validation_data, prompt_file
 def middle_eval_train(model_path, unet, prompt, validation_data, inv_latents_path, accelerator):
     # Setup model
     unet = unet.to(dtype=torch.float16)
-    pipe = TuneAVideoPipeline.from_pretrained(model_path, unet=unet, torch_dtype=torch.float16).to(accelerator.device)
+    pipe = TuneAVideoPipeline.from_pretrained(model_path, unet=unet.model, torch_dtype=torch.float16).to(accelerator.device)
     pipe.enable_xformers_memory_efficient_attention()
     pipe.enable_vae_slicing()
     

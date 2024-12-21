@@ -23,7 +23,7 @@ from diffusers.utils import check_min_version
 from diffusers.utils.import_utils import is_xformers_available
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
-from tuneavideo.models.unet import UNet3DConditionModel
+from tuneavideo.models.unet import UNet3DConditionModel, UNet3DConditionModelParallel
 from tuneavideo.data.dataset import TuneAVideoDataset
 from tuneavideo.pipelines.pipeline_tuneavideo import TuneAVideoPipeline
 from tuneavideo.util import save_videos_grid, ddim_inversion
@@ -35,6 +35,7 @@ from src.temporal_loss import temporal_loss
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.10.0.dev0")
 logger = get_logger(__name__, log_level="INFO")
+device_ids = [torch.device(f'cuda:{i}') for i in range(torch.cuda.device_count())]
 
 def main(
     pretrained_model_path: str,
@@ -85,6 +86,7 @@ def main(
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
         mixed_precision=mixed_precision,
+        device_placement=False
     )
 
     # Make one log on every process with the configuration for debugging.
@@ -131,10 +133,6 @@ def main(
         with open(clip_file_test, "w") as file:
             file.write(f"0:{init_clip_score}\n")
             file.close()
-        
-    # Load teacher model
-    teacher_unet = copy.deepcopy(unet)
-    teacher_unet.requires_grad_(False)
 
     # Freeze vae and text_encoder
     vae.requires_grad_(False)
@@ -154,7 +152,7 @@ def main(
 
     if gradient_checkpointing:
         unet.enable_gradient_checkpointing()
-        teacher_unet.enable_gradient_checkpointing()
+        # teacher_unet.enable_gradient_checkpointing()
 
     if scale_lr:
         learning_rate = (
@@ -202,6 +200,10 @@ def main(
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=train_batch_size, pin_memory=True, prefetch_factor=2
     )
+    
+    # Convert unet to parallel processing
+    unet = UNet3DConditionModelParallel(unet, devices=['cuda:0', 'cuda:1', 'cuda:2', 'cuda:3'])
+    unet = unet.to(dtype=torch.float32)
 
     # Get the validation pipeline
     validation_pipeline = TuneAVideoPipeline(
@@ -219,10 +221,15 @@ def main(
         num_warmup_steps=lr_warmup_steps * gradient_accumulation_steps,
         num_training_steps=max_train_steps * gradient_accumulation_steps,
     )
-
+    
+    # Load teacher model
+    teacher_unet = copy.deepcopy(unet)
+    teacher_unet.requires_grad_(False)
+    teacher_unet = teacher_unet.to(dtype=torch.float32)
+    
     # Prepare everything with our `accelerator`.
-    unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-        unet, optimizer, train_dataloader, lr_scheduler
+    teacher_unet, unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
+        teacher_unet, unet, optimizer, train_dataloader, lr_scheduler
     )
     
     # For mixed precision training we cast the text_encoder and vae weights to half-precision
@@ -234,9 +241,11 @@ def main(
         weight_dtype = torch.bfloat16
 
     # Move text_encode and vae to gpu and cast to weight_dtype
-    text_encoder.to(accelerator.device, dtype=weight_dtype)
-    vae.to(accelerator.device, dtype=weight_dtype)
-    teacher_unet.to(accelerator.device, dtype=weight_dtype)
+    text_encoder.to(unet.device0, dtype=weight_dtype)
+    vae.to(unet.device0, dtype=weight_dtype)
+    vae.enable_slicing()
+    
+    # teacher_unet.to(accelerator.device, dtype=weight_dtype)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
@@ -287,9 +296,9 @@ def main(
     # Only show the progress bar once on each machine.
     progress_bar = tqdm(range(global_step, max_train_steps), disable=not accelerator.is_local_main_process)
     progress_bar.set_description("Steps")
-
+    
     for epoch in range(first_epoch, num_train_epochs):
-        unet.train()
+        unet.model.train()
         train_loss = 0.0
         for step, batch in enumerate(train_dataloader):
             # Skip steps until we reach the resumed step
@@ -300,11 +309,17 @@ def main(
 
             with accelerator.accumulate(unet):
                 # Convert videos to latent space
-                pixel_values = batch["pixel_values"].to(weight_dtype)
+                pixel_values = batch["pixel_values"].to(unet.device0, dtype=weight_dtype)
                 video_length = pixel_values.shape[1]
                 pixel_values = rearrange(pixel_values, "b f c h w -> (b f) c h w")
-                latents = vae.encode(pixel_values).latent_dist.sample()
-                latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length)
+                
+                latents_list = []
+                for chunk in torch.split(pixel_values, 4):
+                    latents_chunk = vae.encode(chunk).latent_dist.sample()
+                    latents_list.append(latents_chunk)
+                latents = torch.cat(latents_list, dim=0)
+                
+                latents = rearrange(latents, "(b f) c h w -> b c f h w", f=video_length).to(unet.device0)
                 latents = latents * 0.18215
                 
                 if latents.shape[2] < train_data.n_sample_frames:
@@ -312,7 +327,7 @@ def main(
                     latents = F.pad(latents, (0, 0, 0, 0, padding_value, 0), "constant", 0)
 
                 # Sample noise that we'll add to the latents
-                noise = torch.randn_like(latents)
+                noise = torch.randn_like(latents).to(unet.device0)
                 bsz = latents.shape[0]
                 
                 # Sample a random timestep for each video
@@ -324,7 +339,7 @@ def main(
                 noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
 
                 # Get the text embedding for conditioning
-                encoder_hidden_states = text_encoder(batch["prompt_ids"])[0]
+                encoder_hidden_states = text_encoder(batch["prompt_ids"].to(unet.device0))[0]
 
                 # Get the target for loss depending on the prediction type
                 if noise_scheduler.prediction_type == "epsilon":
@@ -333,13 +348,19 @@ def main(
                     target = noise_scheduler.get_velocity(latents, noise, timesteps)
                 else:
                     raise ValueError(f"Unknown prediction type {noise_scheduler.prediction_type}")
+            
+                # Move to the first partition's device
+                noisy_latents = noisy_latents.to(unet.device0)
+                encoder_hidden_states = encoder_hidden_states.to(unet.device0)
 
                 # Predict the noise residual
                 model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
                 
-                # Compute distillation loss
+                # Teacher output
                 with torch.no_grad():
                     teacher_output = teacher_unet(noisy_latents, timesteps, encoder_hidden_states).sample.detach()
+                
+                # Compute distillation loss
                 distill_loss = distillation_loss(
                     student_output=model_pred,
                     teacher_output=teacher_output,
@@ -404,7 +425,7 @@ def main(
                             torch.save(ddim_inv_latent, inv_latents_path)
                             
                             # Compute and save CLIP Score on test set
-                            clip_score = middle_eval_test(pretrained_model_path, unet, prompt_file_test, validation_data, prompt_file_train, accelerator)
+                            clip_score = middle_eval_test(pretrained_model_path, unet, prompt_file_test, validation_data, prompt_file_train, accelerator, model_n)
                             with open(clip_file_test, "a") as file:
                                 file.write(f"{model_n}:{clip_score}\n")
                                 file.close()
@@ -435,7 +456,7 @@ def main(
             pretrained_model_path,
             text_encoder=text_encoder,
             vae=vae,
-            unet=unet,
+            unet=unet.model,
         )
         if model_n in save_models:
             os.makedirs(output_dir + f"/model-{model_n}", exist_ok=True)
