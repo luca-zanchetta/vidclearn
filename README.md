@@ -1,4 +1,4 @@
-# VidCLearn: Continual Learning for Text-to-Video Generation
+# VidCLearn: A Continual Learning Approach for Text-to-Video Generation
 
 [![arXiv](https://img.shields.io/badge/arXiv-1234.56789-b31b1b.svg)]()
 
