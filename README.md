@@ -1,6 +1,6 @@
 # VidCLearn: A Continual Learning Approach for Text-to-Video Generation
 
-[![arXiv](https://img.shields.io/badge/arXiv-1234.56789-b31b1b.svg)]()
+[![arXiv](https://img.shields.io/badge/arXiv-1234.56789-b31b1b.svg)](https://arxiv.org/pdf/2509.16956)
 
 This is the official repository that contains the code implementing **VidCLearn**, our proposed continual learning approach for one-shot Text-to-Video generative models.
 
